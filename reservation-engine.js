@@ -1,7 +1,7 @@
 const { chromium } = require("playwright");
 const fs = require("fs");
 
-const ENGINE_VERSION = "2026-09-27-cart-v6";
+const ENGINE_VERSION = "2026-09-27-cart-v7";
 
 const POLL_INTERVAL_MS = 500;
 const PAGE_LOAD_TIMEOUT = 30000;
@@ -273,19 +273,36 @@ async function verifyCart(
   );
 }
 
-async function findCheckoutButton(page) {
-  const selectors = [
-    'button[name="checkout"]',
-    'input[name="checkout"]',
-    'button:has-text("ご購入手続きへ")',
-    'button:has-text("購入手続きへ")',
-    'button:has-text("チェックアウト")',
-    'input[value*="ご購入手続きへ"]',
-    'input[value*="購入手続きへ"]',
-    'button[type="submit"]'
+async function findFinalOrderButton(page) {
+  /*
+   * Fishingmaxの実際のチェックアウト画面では
+   *
+   *     ご注文完了
+   *
+   * と表示されるため、この文字列を最優先で検索する。
+   *
+   * 重要:
+   * この関数は検出だけを行い、
+   * ボタンをクリックしない。
+   */
+
+  const textSelectors = [
+    'button:has-text("ご注文完了")',
+    'button:has-text("注文を確定")',
+    'button:has-text("注文を確定する")',
+    'button:has-text("購入を確定")',
+    'button:has-text("購入を確定する")',
+    'button:has-text("注文する")',
+    'button:has-text("購入する")',
+
+    'input[value*="ご注文完了"]',
+    'input[value*="注文を確定"]',
+    'input[value*="購入を確定"]',
+    'input[value*="注文する"]',
+    'input[value*="購入する"]'
   ];
 
-  for (const selector of selectors) {
+  for (const selector of textSelectors) {
     const locator =
       page.locator(selector);
 
@@ -300,97 +317,90 @@ async function findCheckoutButton(page) {
         await candidate.isVisible()
           .catch(() => false)
       ) {
-        const disabled =
-          await candidate.isDisabled()
-            .catch(() => false);
-
-        if (!disabled) {
-          return candidate;
-        }
+        return {
+          locator: candidate,
+          selector,
+          text:
+            (
+              await candidate.innerText()
+                .catch(() => "")
+            ).trim(),
+          value:
+            await candidate
+              .getAttribute("value")
+              .catch(() => null)
+        };
       }
     }
+  }
+
+  /*
+   * Shopifyのチェックアウトでは
+   * button以外の要素がクリック可能な場合もあるため、
+   * 画面上のテキストから最終ボタンを探索する。
+   */
+
+  const candidates =
+    await page.locator(
+      "button, [role='button'], input[type='submit']"
+    ).evaluateAll(
+      elements =>
+        elements.map(
+          (element, index) => ({
+            index,
+            tag:
+              element.tagName,
+            id:
+              element.id || "",
+            name:
+              element.getAttribute("name") || "",
+            type:
+              element.getAttribute("type") || "",
+            text:
+              (
+                element.innerText ||
+                element.value ||
+                ""
+              ).trim(),
+            visible:
+              !!(
+                element.offsetWidth ||
+                element.offsetHeight ||
+                element.getClientRects().length
+              ),
+            disabled:
+              !!element.disabled
+          })
+        )
+    );
+
+  const finalCandidate =
+    candidates.find(
+      candidate =>
+        candidate.visible &&
+        !candidate.disabled &&
+        /ご注文完了|注文を確定|注文する|購入を確定|購入する/
+          .test(candidate.text)
+    );
+
+  if (finalCandidate) {
+    return {
+      locator:
+        page.locator(
+          "button, [role='button'], input[type='submit']"
+        ).nth(
+          finalCandidate.index
+        ),
+      selector:
+        "generic-final-order-button",
+      text:
+        finalCandidate.text,
+      value:
+        null
+    };
   }
 
   return null;
-}
-
-async function waitForCheckoutButton(page) {
-  const deadline =
-    Date.now() + 15000;
-
-  while (Date.now() < deadline) {
-    const button =
-      await findCheckoutButton(page);
-
-    if (button) {
-      return button;
-    }
-
-    await page.waitForTimeout(200);
-  }
-
-  return null;
-}
-
-async function findFinalOrderButtons(page) {
-  const selectors = [
-    'button[name="commit"]',
-    'button[type="submit"]',
-    'input[type="submit"]',
-    'button:has-text("注文を確定する")',
-    'button:has-text("注文を確定")',
-    'button:has-text("購入を確定する")',
-    'button:has-text("購入を確定")',
-    'button:has-text("注文する")',
-    'button:has-text("購入する")',
-    'input[value*="注文を確定"]',
-    'input[value*="購入を確定"]'
-  ];
-
-  const results = [];
-
-  for (const selector of selectors) {
-    const locator =
-      page.locator(selector);
-
-    const count =
-      await locator.count();
-
-    for (let i = 0; i < count; i++) {
-      const candidate =
-        locator.nth(i);
-
-      if (
-        !(await candidate.isVisible()
-          .catch(() => false))
-      ) {
-        continue;
-      }
-
-      const text =
-        (
-          await candidate.innerText()
-            .catch(() => "")
-        ).trim();
-
-      const value =
-        await candidate
-          .getAttribute("value")
-          .catch(() => null);
-
-      const combined =
-        `${text} ${value || ""}`.trim();
-
-      if (
-        /注文を確定|購入を確定|注文する|購入する/
-          .test(combined)
-      ) {
-        results.push(combined);
-      }
-    }
-  }
-
-  return results;
 }
 
 async function main() {
@@ -581,22 +591,6 @@ async function main() {
       `バリアントID: ${variantId}`
     );
 
-    console.log("");
-
-    /*
-     * ここからカート投入。
-     *
-     * これまでの
-     *
-     *   cartButton.click()
-     *
-     * では、画面上の操作は成功しても
-     * 実際のShopifyカートに商品が入っていない
-     * ケースが確認された。
-     *
-     * そのため、Shopifyのcart/add.jsを使用する。
-     */
-
     await addToCartByApi(
       page,
       variantId,
@@ -622,19 +616,13 @@ async function main() {
         {
           engineVersion:
             ENGINE_VERSION,
-
           verified: true,
-
           variantId,
-
           quantity,
-
           items:
             verifiedCart.items || [],
-
           itemCount:
             verifiedCart.item_count,
-
           total:
             verifiedCart.total_price
         },
@@ -650,12 +638,12 @@ async function main() {
 
     console.log("");
 
+    const origin =
+      new URL(productUrl).origin;
+
     console.log(
       "カートページへ移動します。"
     );
-
-    const origin =
-      new URL(productUrl).origin;
 
     await page.goto(
       `${origin}/cart`,
@@ -688,19 +676,9 @@ async function main() {
       fullPage: true
     });
 
-    /*
-     * 念のため、/cartページでも
-     * 対象商品が表示されていることを確認。
-     */
-
-    const cartPageHasTarget =
-      cartPageText.includes(
-        "岸和田渡船"
-      );
-
     console.log(
       `カートページ商品表示: ${
-        cartPageHasTarget
+        cartPageText.includes("岸和田渡船")
           ? "確認"
           : "未確認"
       }`
@@ -708,18 +686,23 @@ async function main() {
 
     console.log("");
 
-    console.log(
-      "「ご購入手続きへ」を検索します。"
-    );
-
     const checkoutButton =
-      await waitForCheckoutButton(
-        page
-      );
+      await page.locator(
+        'button:has-text("ご購入手続きへ"), ' +
+        'button:has-text("購入手続きへ"), ' +
+        'button:has-text("チェックアウト"), ' +
+        'input[value*="ご購入手続きへ"], ' +
+        'input[value*="購入手続きへ"], ' +
+        'a[href*="/checkout"]'
+      ).filter({
+        visible: true
+      }).first();
 
-    if (!checkoutButton) {
+    if (
+      await checkoutButton.count() === 0
+    ) {
       throw new Error(
-        "カートには商品を確認できましたが、「ご購入手続きへ」ボタンを検出できませんでした。"
+        "カートページで「ご購入手続きへ」ボタンを検出できませんでした。"
       );
     }
 
@@ -730,20 +713,9 @@ async function main() {
           .catch(() => "")
       ).trim();
 
-    const checkoutHref =
-      await checkoutButton
-        .getAttribute("href")
-        .catch(() => null);
-
     console.log(
       `購入手続きボタン検出: ${checkoutText}`
     );
-
-    if (checkoutHref) {
-      console.log(
-        `購入手続きURL: ${checkoutHref}`
-      );
-    }
 
     console.log("");
 
@@ -771,8 +743,8 @@ async function main() {
       "最終注文ボタンを検索します。"
     );
 
-    const finalButtons =
-      await findFinalOrderButtons(
+    const finalButton =
+      await findFinalOrderButton(
         page
       );
 
@@ -786,6 +758,16 @@ async function main() {
         "fishingmax-checkout-final.png",
       fullPage: true
     });
+
+    if (!finalButton) {
+      throw new Error(
+        "チェックアウト画面には到達しましたが、「ご注文完了」ボタンを検出できませんでした。"
+      );
+    }
+
+    console.log(
+      `最終注文ボタン検出: ${finalButton.text || finalButton.value || "検出成功"}`
+    );
 
     fs.writeFileSync(
       "fishingmax-final-result.json",
@@ -822,12 +804,18 @@ async function main() {
             reached: true,
             buttonText:
               checkoutText,
-            href:
-              checkoutHref,
             url:
-              checkoutUrl,
-            finalOrderButtons:
-              finalButtons
+              checkoutUrl
+          },
+
+          finalOrder: {
+            detected: true,
+            buttonText:
+              finalButton.text,
+            buttonValue:
+              finalButton.value,
+            selector:
+              finalButton.selector
           },
 
           safety: {
@@ -862,7 +850,7 @@ async function main() {
     );
 
     console.log(
-      "購入確定直前まで完了"
+      "完成系テスト成功"
     );
 
     console.log(
@@ -882,7 +870,7 @@ async function main() {
     );
 
     console.log(
-      `最終注文ボタン検出数: ${finalButtons.length}`
+      `最終注文ボタン: 検出成功`
     );
 
     console.log("");
