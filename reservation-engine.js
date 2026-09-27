@@ -84,33 +84,24 @@ async function main() {
     console.log(`現在のURL: ${currentUrl}`);
     console.log("");
 
-    /*
-     * ============================================================
-     * SELECT 詳細
-     * ============================================================
-     */
-
+    // SELECTの詳細情報
     const selects = await page.locator("select").evaluateAll((elements) => {
-      return elements.map((element, index) => {
-        const options = Array.from(element.options).map((option) => ({
+      return elements.map((element, index) => ({
+        index: index + 1,
+        id: element.id,
+        name: element.name,
+        className: element.className,
+        value: element.value,
+        disabled: element.disabled,
+        required: element.required,
+        ariaLabel: element.getAttribute("aria-label"),
+        options: Array.from(element.options).map((option) => ({
           text: option.textContent.trim(),
           value: option.value,
           selected: option.selected,
           disabled: option.disabled
-        }));
-
-        return {
-          index: index + 1,
-          id: element.id,
-          name: element.name,
-          className: element.className,
-          value: element.value,
-          disabled: element.disabled,
-          required: element.required,
-          ariaLabel: element.getAttribute("aria-label"),
-          options
-        };
-      });
+        }))
+      }));
     });
 
     console.log("---------- SELECT 詳細 ----------");
@@ -127,6 +118,7 @@ async function main() {
         console.log(`  disabled: ${select.disabled}`);
         console.log(`  required: ${select.required}`);
         console.log(`  aria-label: ${select.ariaLabel}`);
+
         console.log("  options:");
 
         select.options.forEach((option, optionIndex) => {
@@ -139,12 +131,7 @@ async function main() {
       });
     }
 
-    /*
-     * ============================================================
-     * INPUT 詳細
-     * ============================================================
-     */
-
+    // INPUTの詳細情報
     const inputs = await page.locator("input").evaluateAll((elements) => {
       return elements.map((element, index) => ({
         index: index + 1,
@@ -188,12 +175,7 @@ async function main() {
       });
     }
 
-    /*
-     * ============================================================
-     * BUTTON 詳細
-     * ============================================================
-     */
-
+    // BUTTONの詳細情報
     const buttons = await page.locator("button").evaluateAll((elements) => {
       return elements.map((element, index) => ({
         index: index + 1,
@@ -229,12 +211,7 @@ async function main() {
       });
     }
 
-    /*
-     * ============================================================
-     * LABEL 詳細
-     * ============================================================
-     */
-
+    // LABELの詳細情報
     const labels = await page.locator("label").evaluateAll((elements) => {
       return elements.map((element, index) => ({
         index: index + 1,
@@ -258,13 +235,8 @@ async function main() {
       });
     }
 
-    /*
-     * ============================================================
-     * 商品情報に関連するDOM
-     * ============================================================
-     */
-
-    const productForms = await page.locator("form").evaluateAll((elements) => {
+    // FORMの詳細情報
+    const forms = await page.locator("form").evaluateAll((elements) => {
       return elements.map((element, index) => ({
         index: index + 1,
         id: element.id,
@@ -277,10 +249,10 @@ async function main() {
 
     console.log("---------- FORM 詳細 ----------");
 
-    if (productForms.length === 0) {
+    if (forms.length === 0) {
       console.log("FORMは検出されませんでした。");
     } else {
-      productForms.forEach((form) => {
+      forms.forEach((form) => {
         console.log(`FORM #${form.index}`);
         console.log(`  id: ${form.id}`);
         console.log(`  name: ${form.name}`);
@@ -291,20 +263,9 @@ async function main() {
       });
     }
 
-    /*
-     * ============================================================
-     * 商品ページ本文
-     * ============================================================
-     */
-
     const bodyText = await page.locator("body").innerText();
 
-    /*
-     * ============================================================
-     * 詳細レポート保存
-     * ============================================================
-     */
-
+    // レポート作成
     const report = {
       testType: "Fishingmax商品ページ詳細調査テスト",
       checkedAt: new Date().toISOString(),
@@ -320,30 +281,40 @@ async function main() {
         selects: selects.length,
         textareas: await page.locator("textarea").count(),
         labels: labels.length,
-        forms: productForms.length
+        forms: forms.length
       },
 
       selects,
       inputs,
       buttons,
       labels,
-      forms: productForms,
+      forms,
 
       bodyTextPreview: bodyText.substring(0, 15000)
     };
 
+    // 新しい詳細調査用JSON
     fs.writeFileSync(
       "fishingmax-element-details.json",
       JSON.stringify(report, null, 2),
       "utf8"
     );
 
+    // 旧システムとの互換用JSON
+    fs.writeFileSync(
+      "fishingmax-page-report.json",
+      JSON.stringify(report, null, 2),
+      "utf8"
+    );
+
+    // 本文
     fs.writeFileSync(
       "fishingmax-page-text.txt",
       bodyText,
       "utf8"
     );
 
+    // スクリーンショット
     await page.screenshot({
       path: "fishingmax-page.png",
       fullPage: true
@@ -351,6 +322,7 @@ async function main() {
 
     console.log("---------- 保存ファイル ----------");
     console.log("fishingmax-element-details.json");
+    console.log("fishingmax-page-report.json");
     console.log("fishingmax-page-text.txt");
     console.log("fishingmax-page.png");
     console.log("");
@@ -359,15 +331,13 @@ async function main() {
     console.log("商品ページ詳細調査テスト完了");
     console.log("========================================");
     console.log("");
-    console.log("今回のテストでは以下を実行していません。");
-    console.log("- 商品種類の変更");
-    console.log("- 出船時間の変更");
-    console.log("- 数量変更");
-    console.log("- カート投入");
-    console.log("- 注文処理");
-    console.log("- 注文確定");
-    console.log("");
-    console.log("商品ページのHTML要素を読み取っただけです。");
+    console.log("今回は読み取りのみです。");
+    console.log("商品種類の変更はしていません。");
+    console.log("出船時間の変更はしていません。");
+    console.log("数量変更はしていません。");
+    console.log("カート投入はしていません。");
+    console.log("注文処理はしていません。");
+    console.log("注文確定はしていません。");
 
   } finally {
     await context.close();
