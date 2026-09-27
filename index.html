@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>自動予約システム</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px 14px 40px;
+            background: #f4f6f8;
+            color: #222;
+            font-family:
+                -apple-system,
+                BlinkMacSystemFont,
+                "Helvetica Neue",
+                "Hiragino Kaku Gothic ProN",
+                "Yu Gothic",
+                Meiryo,
+                sans-serif;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: #ffffff;
+            border-radius: 18px;
+            padding: 22px 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            text-align: center;
+        }
+
+        .header p {
+            margin: 8px 0 0;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .card {
+            background: #ffffff;
+            border-radius: 18px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+        }
+
+        .card-title {
+            margin: 0 0 18px;
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .form-group {
+            margin-bottom: 18px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 7px;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        input,
+        select {
+            width: 100%;
+            height: 50px;
+            padding: 0 14px;
+            border: 1px solid #d5d9de;
+            border-radius: 10px;
+            background: #ffffff;
+            color: #222;
+            font-size: 16px;
+            outline: none;
+        }
+
+        input:focus,
+        select:focus {
+            border-color: #007aff;
+            box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.12);
+        }
+
+        .button {
+            width: 100%;
+            height: 54px;
+            border: none;
+            border-radius: 12px;
+            background: #007aff;
+            color: #ffffff;
+            font-size: 17px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .button:active {
+            transform: scale(0.99);
+        }
+
+        .button.stop {
+            margin-top: 10px;
+            background: #ff3b30;
+        }
+
+        .status-box {
+            border-radius: 12px;
+            padding: 16px;
+            background: #f2f3f5;
+        }
+
+        .status-label {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .status {
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .status.waiting {
+            color: #555;
+        }
+
+        .status.running {
+            color: #007aff;
+        }
+
+        .status.success {
+            color: #34c759;
+        }
+
+        .status.warning {
+            color: #ff9500;
+        }
+
+        .status.error {
+            color: #ff3b30;
+        }
+
+        .log {
+            margin-top: 14px;
+            padding: 12px;
+            height: 180px;
+            overflow-y: auto;
+            background: #1c1c1e;
+            color: #f2f2f7;
+            border-radius: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .notice {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.6;
+            margin-top: 14px;
+        }
+
+        .footer {
+            text-align: center;
+            color: #888;
+            font-size: 12px;
+            padding: 10px;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            body {
+                background: #111111;
+                color: #ffffff;
+            }
+
+            .header,
+            .card {
+                background: #1c1c1e;
+            }
+
+            input,
+            select {
+                background: #2c2c2e;
+                color: #ffffff;
+                border-color: #444444;
+            }
+
+            .status-box {
+                background: #2c2c2e;
+            }
+
+            .log {
+                background: #000000;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="header">
+        <h1>自動予約システム</h1>
+        <p>Fishingmax 予約操作画面</p>
+    </div>
+
+    <div class="card">
+
+        <h2 class="card-title">予約情報</h2>
+
+        <div class="form-group">
+            <label for="productUrl">商品URL</label>
+            <input
+                type="url"
+                id="productUrl"
+                placeholder="https://www.fishingmax-webshop.jp/products/..."
+                autocomplete="off"
+            >
+        </div>
+
+        <div class="form-group">
+            <label for="variant">商品種類</label>
+
+            <select id="variant">
+                <option value="">商品種類を選択してください</option>
+                <option value="04時00分">04時00分</option>
+                <option value="05時00分">05時00分</option>
+                <option value="06時00分">06時00分</option>
+                <option value="07時00分">07時00分</option>
+                <option value="08時00分">08時00分</option>
+                <option value="09時00分">09時00分</option>
+                <option value="10時00分">10時00分</option>
+                <option value="11時00分">11時00分</option>
+                <option value="12時00分">12時00分</option>
+                <option value="13時00分">13時00分</option>
+                <option value="14時00分">14時00分</option>
+                <option value="15時00分">15時00分</option>
+                <option value="16時00分">16時00分</option>
+                <option value="17時00分">17時00分</option>
+                <option value="18時00分">18時00分</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="quantity">購入数量</label>
+
+            <input
+                type="number"
+                id="quantity"
+                value="1"
+                min="1"
+                max="99"
+                inputmode="numeric"
+            >
+        </div>
+
+        <div class="form-group">
+            <label for="startTime">予約開始時刻</label>
+
+            <input
+                type="time"
+                id="startTime"
+                step="1"
+            >
+        </div>
+
+        <button
+            type="button"
+            class="button"
+            id="startButton"
+            onclick="startReservation()"
+        >
+            予約開始
+        </button>
+
+        <button
+            type="button"
+            class="button stop"
+            id="stopButton"
+            onclick="stopReservation()"
+            style="display: none;"
+        >
+            停止
+        </button>
+
+    </div>
+
+    <div class="card">
+
+        <h2 class="card-title">現在の状態</h2>
+
+        <div class="status-box">
+
+            <div class="status-label">
+                システム状態
+            </div>
+
+            <div
+                id="status"
+                class="status waiting"
+            >
+                待機中
+            </div>
+
+        </div>
+
+        <div
+            id="log"
+            class="log"
+        >
+            システムを起動しました。
+        </div>
+
+        <div class="notice">
+            ※ 現在は画面部分のみの試作です。
+            この段階ではFishingmaxへの自動アクセスは行いません。
+        </div>
+
+    </div>
+
+    <div class="footer">
+        Fishingmax 自動予約システム
+    </div>
+
+</div>
+
+
+<script>
+
+    let reservationRunning = false;
+
+
+    function addLog(message) {
+
+        const log = document.getElementById("log");
+
+        const now = new Date();
+
+        const time =
+            now.toLocaleTimeString(
+                "ja-JP",
+                {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit"
+                }
+            );
+
+        log.innerHTML +=
+            "<br>[" +
+            time +
+            "] " +
+            message;
+
+        log.scrollTop = log.scrollHeight;
+    }
+
+
+    function setStatus(message, type) {
+
+        const status =
+            document.getElementById("status");
+
+        status.textContent = message;
+
+        status.className =
+            "status " +
+            type;
+    }
+
+
+    function startReservation() {
+
+        if (reservationRunning) {
+            return;
+        }
+
+
+        const productUrl =
+            document
+                .getElementById("productUrl")
+                .value
+                .trim();
+
+
+        const variant =
+            document
+                .getElementById("variant")
+                .value;
+
+
+        const quantity =
+            document
+                .getElementById("quantity")
+                .value;
+
+
+        const startTime =
+            document
+                .getElementById("startTime")
+                .value;
+
+
+        if (!productUrl) {
+
+            alert("商品URLを入力してください。");
+
+            return;
+        }
+
+
+        if (!variant) {
+
+            alert("商品種類を選択してください。");
+
+            return;
+        }
+
+
+        if (!quantity || Number(quantity) < 1) {
+
+            alert("購入数量を1以上にしてください。");
+
+            return;
+        }
+
+
+        if (!startTime) {
+
+            alert("予約開始時刻を入力してください。");
+
+            return;
+        }
+
+
+        reservationRunning = true;
+
+
+        document
+            .getElementById("startButton")
+            .style.display = "none";
+
+
+        document
+            .getElementById("stopButton")
+            .style.display = "block";
+
+
+        setStatus(
+            "予約待機中",
+            "running"
+        );
+
+
+        addLog(
+            "予約情報を受け付けました。"
+        );
+
+
+        addLog(
+            "商品種類：" +
+            variant
+        );
+
+
+        addLog(
+            "購入数量：" +
+            quantity +
+            "個"
+        );
+
+
+        addLog(
+            "予約開始時刻：" +
+            startTime
+        );
+
+
+        addLog(
+            "現在はテストモードです。"
+        );
+
+
+        addLog(
+            "クラウド予約エンジンはまだ接続されていません。"
+        );
+
+    }
+
+
+    function stopReservation() {
+
+        reservationRunning = false;
+
+
+        document
+            .getElementById("startButton")
+            .style.display = "block";
+
+
+        document
+            .getElementById("stopButton")
+            .style.display = "none";
+
+
+        setStatus(
+            "停止しました",
+            "warning"
+        );
+
+
+        addLog(
+            "予約処理を停止しました。"
+        );
+
+    }
+
+</script>
+
+</body>
+</html>
