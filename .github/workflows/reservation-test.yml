@@ -34,11 +34,14 @@ jobs:
           PRODUCT_URL: ${{ inputs.product_url }}
         run: npm start
 
-      - name: Upload test screenshot
+      - name: Upload Fishingmax page inspection results
         if: always()
         uses: actions/upload-artifact@v5
         with:
-          name: fishingmax-browser-test
-          path: fishingmax-test.png
-          if-no-files-found: ignore
+          name: fishingmax-page-inspection
+          path: |
+            fishingmax-page.png
+            fishingmax-page-report.json
+            fishingmax-page-text.txt
+          if-no-files-found: error
           retention-days: 7
