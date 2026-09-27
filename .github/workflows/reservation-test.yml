@@ -1,4 +1,4 @@
-name: Fishingmax Reservation Engine Test
+name: Fishingmax Reservation Engine
 
 on:
   workflow_dispatch:
@@ -21,10 +21,10 @@ on:
         type: string
 
 jobs:
-  browser-test:
-    name: Open Fishingmax with Playwright
+  reservation:
+    name: Fishingmax Reservation
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Checkout repository
@@ -41,8 +41,7 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Run Fishingmax cart test
-        id: fishingmax-test
+      - name: Run Fishingmax reservation engine
         env:
           PRODUCT_URL: ${{ inputs.product_url }}
           DESIRED_TIME: ${{ inputs.desired_time }}
@@ -55,23 +54,24 @@ jobs:
         if: always()
         run: |
           echo "========================================"
-          echo "生成ファイル"
+          echo "Generated files"
           echo "========================================"
           find . -maxdepth 2 -type f | sort
 
-      - name: Upload Fishingmax cart test results
+      - name: Upload reservation result
         if: always()
         uses: actions/upload-artifact@v5
         with:
-          name: fishingmax-cart-test
+          name: fishingmax-reservation-result
           path: |
             fishingmax-run.log
+            fishingmax-final-result.json
+            fishingmax-page-text.txt
+            fishingmax-cart-added.png
+            fishingmax-checkout-final.png
             fishingmax-error.txt
             fishingmax-error-page.png
             fishingmax-error-page-url.txt
             fishingmax-error-page-text.txt
-            fishingmax-cart-test.json
-            fishingmax-cart-test.png
-            fishingmax-page-text.txt
           if-no-files-found: warn
           retention-days: 7
