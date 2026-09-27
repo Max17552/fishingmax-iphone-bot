@@ -9,22 +9,22 @@ on:
         type: string
 
       desired_time:
-        description: "希望出船時間（例: 11時00分）"
+        description: "予約する時間（例: 11時00分）"
         required: true
         default: "11時00分"
         type: string
 
       desired_quantity:
-        description: "購入数量"
+        description: "数量"
         required: true
         default: "1"
         type: string
 
 jobs:
-  reservation:
-    name: Fishingmax Reservation
+  reservation-engine:
+    name: Run Fishingmax Reservation Engine
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
 
     steps:
       - name: Checkout repository
@@ -33,45 +33,39 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: "22"
+          node-version: 22
+          cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
-      - name: Install Playwright Chromium
+      - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
 
-      - name: Run Fishingmax reservation engine
+      - name: Run reservation engine
         env:
           PRODUCT_URL: ${{ inputs.product_url }}
           DESIRED_TIME: ${{ inputs.desired_time }}
           DESIRED_QUANTITY: ${{ inputs.desired_quantity }}
         run: |
           npm start 2>&1 | tee fishingmax-run.log
-          exit ${PIPESTATUS[0]}
-
-      - name: Show generated files
-        if: always()
-        run: |
-          echo "========================================"
-          echo "Generated files"
-          echo "========================================"
-          find . -maxdepth 2 -type f | sort
 
       - name: Upload reservation result
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: fishingmax-reservation-result
           path: |
             fishingmax-run.log
             fishingmax-final-result.json
+            fishingmax-cart-verified.json
             fishingmax-page-text.txt
-            fishingmax-cart-added.png
+            fishingmax-cart-page-text.txt
             fishingmax-checkout-final.png
+            fishingmax-cart-page.png
             fishingmax-error.txt
-            fishingmax-error-page.png
             fishingmax-error-page-url.txt
             fishingmax-error-page-text.txt
-          if-no-files-found: warn
+            fishingmax-error-page.png
+          if-no-files-found: ignore
           retention-days: 7
