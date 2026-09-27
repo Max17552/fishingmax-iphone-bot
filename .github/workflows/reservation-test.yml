@@ -8,6 +8,18 @@ on:
         required: true
         type: string
 
+      desired_time:
+        description: "希望出船時間（例: 11時00分）"
+        required: true
+        default: "11時00分"
+        type: string
+
+      desired_quantity:
+        description: "購入数量"
+        required: true
+        default: "1"
+        type: string
+
 jobs:
   browser-test:
     name: Open Fishingmax with Playwright
@@ -29,10 +41,12 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Run Fishingmax browser test
+      - name: Run Fishingmax selection test
         id: fishingmax-test
         env:
           PRODUCT_URL: ${{ inputs.product_url }}
+          DESIRED_TIME: ${{ inputs.desired_time }}
+          DESIRED_QUANTITY: ${{ inputs.desired_quantity }}
         run: |
           npm start 2>&1 | tee fishingmax-run.log
           exit ${PIPESTATUS[0]}
@@ -52,20 +66,17 @@ jobs:
           find . -maxdepth 2 -type f | sort
           echo ""
 
-      - name: Upload Fishingmax page inspection results
+      - name: Upload Fishingmax test results
         if: always()
         uses: actions/upload-artifact@v5
         with:
-          name: fishingmax-page-inspection
+          name: fishingmax-selection-test
           path: |
             fishingmax-run.log
             fishingmax-error.txt
-            fishingmax-error-page-url.txt
             fishingmax-error-page.png
-            fishingmax-error-page-text.txt
-            fishingmax-page.png
-            fishingmax-page-report.json
-            fishingmax-element-details.json
+            fishingmax-selection-test.json
+            fishingmax-selection-test.png
             fishingmax-page-text.txt
           if-no-files-found: warn
           retention-days: 7
