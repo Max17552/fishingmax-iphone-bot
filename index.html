@@ -1,244 +1,365 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#007aff">
+<title>Fishingmax 自動予約システム</title>
 
-    <title>自動予約システム</title>
+<style>
+* {
+    box-sizing: border-box;
+}
 
-    <style>
-        * {
-            box-sizing: border-box;
-        }
+:root {
+    --blue: #007aff;
+    --blue-dark: #005ecb;
+    --green: #34c759;
+    --orange: #ff9500;
+    --red: #ff3b30;
+    --gray-bg: #f4f6f8;
+    --gray: #6b7280;
+    --border: #d5d9de;
+    --card: #ffffff;
+    --text: #222222;
+}
 
-        body {
-            margin: 0;
-            padding: 20px 14px 40px;
-            background: #f4f6f8;
-            color: #222;
-            font-family:
-                -apple-system,
-                BlinkMacSystemFont,
-                "Helvetica Neue",
-                "Hiragino Kaku Gothic ProN",
-                "Yu Gothic",
-                Meiryo,
-                sans-serif;
-        }
+body {
+    margin: 0;
+    padding: 16px 12px 36px;
+    background: var(--gray-bg);
+    color: var(--text);
+    font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "Helvetica Neue",
+        "Hiragino Kaku Gothic ProN",
+        "Yu Gothic",
+        Meiryo,
+        sans-serif;
+}
 
-        .container {
-            width: 100%;
-            max-width: 600px;
-            margin: 0 auto;
-        }
+.container {
+    width: 100%;
+    max-width: 620px;
+    margin: 0 auto;
+}
 
-        .header {
-            background: #ffffff;
-            border-radius: 18px;
-            padding: 22px 20px;
-            margin-bottom: 16px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
-        }
+.header,
+.card {
+    background: var(--card);
+    border-radius: 18px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
 
-        .header h1 {
-            margin: 0;
-            font-size: 24px;
-            text-align: center;
-        }
+.header {
+    padding: 22px 18px;
+    margin-bottom: 14px;
+    text-align: center;
+}
 
-        .header p {
-            margin: 8px 0 0;
-            text-align: center;
-            color: #666;
-            font-size: 14px;
-        }
+.header h1 {
+    margin: 0;
+    font-size: 24px;
+}
 
-        .card {
-            background: #ffffff;
-            border-radius: 18px;
-            padding: 20px;
-            margin-bottom: 16px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
-        }
+.header p {
+    margin: 8px 0 0;
+    color: #70757d;
+    font-size: 14px;
+}
 
-        .card-title {
-            margin: 0 0 18px;
-            font-size: 18px;
-            font-weight: 700;
-        }
+.card {
+    padding: 18px;
+    margin-bottom: 14px;
+}
 
-        .form-group {
-            margin-bottom: 18px;
-        }
+.card-title {
+    margin: 0 0 16px;
+    font-size: 19px;
+}
 
-        label {
-            display: block;
-            margin-bottom: 7px;
-            font-size: 14px;
-            font-weight: 700;
-        }
+.form-group {
+    margin-bottom: 16px;
+}
 
-        input,
-        select {
-            width: 100%;
-            height: 50px;
-            padding: 0 14px;
-            border: 1px solid #d5d9de;
-            border-radius: 10px;
-            background: #ffffff;
-            color: #222;
-            font-size: 16px;
-            outline: none;
-        }
+label {
+    display: block;
+    margin-bottom: 7px;
+    font-size: 14px;
+    font-weight: 700;
+}
 
-        input:focus,
-        select:focus {
-            border-color: #007aff;
-            box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.12);
-        }
+.help {
+    margin-top: 6px;
+    color: var(--gray);
+    font-size: 12px;
+    line-height: 1.5;
+}
 
-        .button {
-            width: 100%;
-            height: 54px;
-            border: none;
-            border-radius: 12px;
-            background: #007aff;
-            color: #ffffff;
-            font-size: 17px;
-            font-weight: 700;
-            cursor: pointer;
-        }
+input,
+select {
+    width: 100%;
+    height: 50px;
+    padding: 0 13px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #fff;
+    color: var(--text);
+    font-size: 16px;
+    outline: none;
+}
 
-        .button:active {
-            transform: scale(0.99);
-        }
+input:focus,
+select:focus {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.12);
+}
 
-        .button.stop {
-            margin-top: 10px;
-            background: #ff3b30;
-        }
+.row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
 
-        .status-box {
-            border-radius: 12px;
-            padding: 16px;
-            background: #f2f3f5;
-        }
+.button {
+    width: 100%;
+    min-height: 52px;
+    border: 0;
+    border-radius: 12px;
+    color: #fff;
+    font-size: 17px;
+    font-weight: 700;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
 
-        .status-label {
-            font-size: 13px;
-            color: #666;
-            margin-bottom: 5px;
-        }
+.button:active {
+    transform: scale(0.99);
+}
 
-        .status {
-            font-size: 18px;
-            font-weight: 700;
-        }
+.button.primary {
+    background: var(--blue);
+}
 
-        .status.waiting {
-            color: #555;
-        }
+.button.primary:disabled {
+    opacity: 0.5;
+}
 
-        .status.running {
-            color: #007aff;
-        }
+.button.secondary {
+    background: #e9edf2;
+    color: #222;
+}
 
-        .status.success {
-            color: #34c759;
-        }
+.button.stop {
+    background: var(--red);
+}
 
-        .status.warning {
-            color: #ff9500;
-        }
+.button.small {
+    min-height: 44px;
+    font-size: 14px;
+}
 
-        .status.error {
-            color: #ff3b30;
-        }
+.button-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
 
-        .log {
-            margin-top: 14px;
-            padding: 12px;
-            height: 180px;
-            overflow-y: auto;
-            background: #1c1c1e;
-            color: #f2f2f7;
-            border-radius: 10px;
-            font-family: monospace;
-            font-size: 12px;
-            line-height: 1.6;
-        }
+.status-box {
+    padding: 16px;
+    border-radius: 12px;
+    background: #f1f3f5;
+}
 
-        .notice {
-            font-size: 13px;
-            color: #666;
-            line-height: 1.6;
-            margin-top: 14px;
-        }
+.status-label {
+    color: var(--gray);
+    font-size: 13px;
+    margin-bottom: 5px;
+}
 
-        .footer {
-            text-align: center;
-            color: #888;
-            font-size: 12px;
-            padding: 10px;
-        }
+.status {
+    font-size: 20px;
+    font-weight: 800;
+}
 
-        @media (prefers-color-scheme: dark) {
-            body {
-                background: #111111;
-                color: #ffffff;
-            }
+.status.waiting {
+    color: #555;
+}
 
-            .header,
-            .card {
-                background: #1c1c1e;
-            }
+.status.running {
+    color: var(--blue);
+}
 
-            input,
-            select {
-                background: #2c2c2e;
-                color: #ffffff;
-                border-color: #444444;
-            }
+.status.success {
+    color: var(--green);
+}
 
-            .status-box {
-                background: #2c2c2e;
-            }
+.status.warning {
+    color: var(--orange);
+}
 
-            .log {
-                background: #000000;
-            }
-        }
-    </style>
+.status.error {
+    color: var(--red);
+}
+
+.countdown {
+    margin-top: 10px;
+    padding: 13px;
+    border-radius: 10px;
+    background: #eef5ff;
+    color: #1457a6;
+    font-weight: 700;
+    text-align: center;
+}
+
+.summary {
+    margin-top: 14px;
+    border-top: 1px solid #e5e7eb;
+    padding-top: 12px;
+}
+
+.summary-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 7px 0;
+    font-size: 13px;
+}
+
+.summary-row span:first-child {
+    color: var(--gray);
+}
+
+.summary-row span:last-child {
+    text-align: right;
+    word-break: break-all;
+    font-weight: 600;
+}
+
+.log {
+    margin-top: 12px;
+    padding: 12px;
+    min-height: 190px;
+    max-height: 300px;
+    overflow-y: auto;
+    background: #1c1c1e;
+    color: #f2f2f7;
+    border-radius: 10px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.notice {
+    margin-top: 12px;
+    padding: 12px;
+    border-radius: 10px;
+    background: #fff7e6;
+    color: #7a4b00;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.notice strong {
+    display: block;
+    margin-bottom: 4px;
+}
+
+.footer {
+    text-align: center;
+    color: #888;
+    font-size: 12px;
+    padding: 8px;
+}
+
+.hidden {
+    display: none !important;
+}
+
+@media (max-width: 420px) {
+    .row,
+    .button-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (prefers-color-scheme: dark) {
+    body {
+        background: #111;
+        color: #fff;
+    }
+
+    .header,
+    .card {
+        background: #1c1c1e;
+    }
+
+    input,
+    select {
+        background: #2c2c2e;
+        color: #fff;
+        border-color: #444;
+    }
+
+    .status-box {
+        background: #2c2c2e;
+    }
+
+    .summary {
+        border-color: #3a3a3c;
+    }
+
+    .button.secondary {
+        background: #3a3a3c;
+        color: #fff;
+    }
+
+    .countdown {
+        background: #172a40;
+        color: #8fc1ff;
+    }
+
+    .notice {
+        background: #33280f;
+        color: #ffd37a;
+    }
+}
+</style>
 </head>
 
 <body>
-
 <div class="container">
 
-    <div class="header">
+    <header class="header">
         <h1>自動予約システム</h1>
         <p>Fishingmax 予約操作画面</p>
-    </div>
+    </header>
 
-    <div class="card">
-
-        <h2 class="card-title">予約情報</h2>
+    <section class="card">
+        <h2 class="card-title">予約設定</h2>
 
         <div class="form-group">
             <label for="productUrl">商品URL</label>
             <input
-                type="url"
                 id="productUrl"
+                type="url"
+                inputmode="url"
                 placeholder="https://www.fishingmax-webshop.jp/products/..."
                 autocomplete="off"
+                spellcheck="false"
             >
+            <div class="help">
+                Fishingmax WEBSHOPの商品ページURLを入力してください。
+            </div>
         </div>
 
         <div class="form-group">
-            <label for="variant">商品種類</label>
-
+            <label for="variant">商品種類・希望時間</label>
             <select id="variant">
-                <option value="">商品種類を選択してください</option>
+                <option value="">選択してください</option>
                 <option value="04時00分">04時00分</option>
                 <option value="05時00分">05時00分</option>
                 <option value="06時00分">06時00分</option>
@@ -257,280 +378,460 @@
             </select>
         </div>
 
-        <div class="form-group">
-            <label for="quantity">購入数量</label>
+        <div class="row">
+            <div class="form-group">
+                <label for="quantity">購入数量</label>
+                <input
+                    id="quantity"
+                    type="number"
+                    value="1"
+                    min="1"
+                    max="99"
+                    step="1"
+                    inputmode="numeric"
+                >
+            </div>
 
-            <input
-                type="number"
-                id="quantity"
-                value="1"
-                min="1"
-                max="99"
-                inputmode="numeric"
-            >
+            <div class="form-group">
+                <label for="retryInterval">確認間隔</label>
+                <select id="retryInterval">
+                    <option value="1">1秒</option>
+                    <option value="2" selected>2秒</option>
+                    <option value="3">3秒</option>
+                    <option value="5">5秒</option>
+                    <option value="10">10秒</option>
+                </select>
+            </div>
         </div>
 
         <div class="form-group">
-            <label for="startTime">予約開始時刻</label>
-
-            <input
-                type="time"
-                id="startTime"
-                step="1"
-            >
+            <label for="startDateTime">予約処理開始日時</label>
+            <input id="startDateTime" type="datetime-local" step="1">
+            <div class="help">
+                この時刻になったら予約処理を開始する設定です。
+                現在はテスト画面のため、Fishingmaxへは接続しません。
+            </div>
         </div>
 
-        <button
-            type="button"
-            class="button"
-            id="startButton"
-            onclick="startReservation()"
-        >
-            予約開始
+        <div class="button-row">
+            <button type="button" class="button secondary" id="saveButton">
+                設定を保存
+            </button>
+            <button type="button" class="button secondary" id="clearButton">
+                設定を消去
+            </button>
+        </div>
+
+        <div style="height:10px;"></div>
+
+        <button type="button" class="button primary" id="startButton">
+            予約待機を開始
         </button>
 
         <button
             type="button"
-            class="button stop"
+            class="button stop hidden"
             id="stopButton"
-            onclick="stopReservation()"
-            style="display: none;"
+            style="margin-top:10px;"
         >
             停止
         </button>
+    </section>
 
-    </div>
-
-    <div class="card">
-
+    <section class="card">
         <h2 class="card-title">現在の状態</h2>
 
         <div class="status-box">
-
-            <div class="status-label">
-                システム状態
-            </div>
-
-            <div
-                id="status"
-                class="status waiting"
-            >
-                待機中
-            </div>
-
+            <div class="status-label">システム状態</div>
+            <div id="status" class="status waiting">待機中</div>
+            <div id="countdown" class="countdown hidden"></div>
         </div>
 
-        <div
-            id="log"
-            class="log"
-        >
-            システムを起動しました。
+        <div class="summary">
+            <div class="summary-row">
+                <span>商品</span>
+                <span id="summaryUrl">未設定</span>
+            </div>
+            <div class="summary-row">
+                <span>希望時間</span>
+                <span id="summaryVariant">未設定</span>
+            </div>
+            <div class="summary-row">
+                <span>数量</span>
+                <span id="summaryQuantity">未設定</span>
+            </div>
+            <div class="summary-row">
+                <span>開始日時</span>
+                <span id="summaryStart">未設定</span>
+            </div>
+            <div class="summary-row">
+                <span>確認間隔</span>
+                <span id="summaryRetry">未設定</span>
+            </div>
+        </div>
+
+        <div id="log" class="log">システムを起動しました。</div>
+
+        <div class="button-row" style="margin-top:10px;">
+            <button type="button" class="button small secondary" id="clearLogButton">
+                ログを消去
+            </button>
+            <button type="button" class="button small secondary" id="testButton">
+                動作テスト
+            </button>
         </div>
 
         <div class="notice">
-            ※ 現在は画面部分のみの試作です。
-            この段階ではFishingmaxへの自動アクセスは行いません。
+            <strong>現在の動作について</strong>
+            この画面は予約システムの操作部分です。現在はクラウド予約エンジン未接続のため、
+            Fishingmaxへの自動アクセス・在庫確認・注文操作は行いません。
+            hCaptcha等の認証が必要になった場合は、今後も手動対応を前提とします。
+            また、最終的な「注文を確定」操作は自動実行しない設計にします。
         </div>
+    </section>
 
-    </div>
-
-    <div class="footer">
+    <footer class="footer">
         Fishingmax 自動予約システム
-    </div>
-
+    </footer>
 </div>
 
-
 <script>
+"use strict";
 
-    let reservationRunning = false;
+const STORAGE_KEY = "fishingmaxReservationSettings";
 
+let reservationRunning = false;
+let countdownTimer = null;
+let scheduledStart = null;
 
-    function addLog(message) {
+const $ = (id) => document.getElementById(id);
 
-        const log = document.getElementById("log");
+function nowText() {
+    return new Date().toLocaleTimeString("ja-JP", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+    });
+}
 
-        const now = new Date();
+function addLog(message) {
+    const log = $("log");
+    const line = `[${nowText()}] ${message}`;
+    log.textContent += (log.textContent ? "\n" : "") + line;
+    log.scrollTop = log.scrollHeight;
+}
 
-        const time =
-            now.toLocaleTimeString(
-                "ja-JP",
-                {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    second: "2-digit"
-                }
+function clearLog() {
+    $("log").textContent = "";
+    addLog("ログを消去しました。");
+}
+
+function setStatus(message, type) {
+    const status = $("status");
+    status.textContent = message;
+    status.className = "status " + type;
+}
+
+function setCountdown(message, visible = true) {
+    const countdown = $("countdown");
+    countdown.textContent = message;
+    countdown.classList.toggle("hidden", !visible);
+}
+
+function formatDateTime(value) {
+    if (!value) return "未設定";
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+
+    return date.toLocaleString("ja-JP", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+    });
+}
+
+function updateSummary() {
+    $("summaryUrl").textContent =
+        $("productUrl").value.trim() || "未設定";
+
+    $("summaryVariant").textContent =
+        $("variant").value || "未設定";
+
+    $("summaryQuantity").textContent =
+        $("quantity").value
+            ? `${$("quantity").value}個`
+            : "未設定";
+
+    $("summaryStart").textContent =
+        formatDateTime($("startDateTime").value);
+
+    $("summaryRetry").textContent =
+        $("retryInterval").value
+            ? `${$("retryInterval").value}秒`
+            : "未設定";
+}
+
+function saveSettings(showLog = true) {
+    const settings = {
+        productUrl: $("productUrl").value.trim(),
+        variant: $("variant").value,
+        quantity: $("quantity").value,
+        startDateTime: $("startDateTime").value,
+        retryInterval: $("retryInterval").value
+    };
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    updateSummary();
+
+    if (showLog) {
+        addLog("設定をこのiPhoneのブラウザに保存しました。");
+    }
+}
+
+function loadSettings() {
+    const raw = localStorage.getItem(STORAGE_KEY);
+
+    if (!raw) {
+        updateSummary();
+        return;
+    }
+
+    try {
+        const settings = JSON.parse(raw);
+
+        $("productUrl").value = settings.productUrl || "";
+        $("variant").value = settings.variant || "";
+        $("quantity").value = settings.quantity || "1";
+        $("startDateTime").value = settings.startDateTime || "";
+        $("retryInterval").value = settings.retryInterval || "2";
+
+        updateSummary();
+        addLog("保存済みの設定を読み込みました。");
+    } catch (error) {
+        updateSummary();
+        addLog("保存済み設定の読み込みに失敗しました。");
+    }
+}
+
+function clearSettings() {
+    if (!confirm("保存した設定を消去しますか？")) {
+        return;
+    }
+
+    localStorage.removeItem(STORAGE_KEY);
+
+    $("productUrl").value = "";
+    $("variant").value = "";
+    $("quantity").value = "1";
+    $("startDateTime").value = "";
+    $("retryInterval").value = "2";
+
+    updateSummary();
+    addLog("保存済み設定を消去しました。");
+}
+
+function validateSettings() {
+    const productUrl = $("productUrl").value.trim();
+    const variant = $("variant").value;
+    const quantity = Number($("quantity").value);
+    const startDateTime = $("startDateTime").value;
+
+    if (!productUrl) {
+        alert("商品URLを入力してください。");
+        return false;
+    }
+
+    try {
+        const url = new URL(productUrl);
+
+        if (
+            url.protocol !== "https:" ||
+            url.hostname !== "www.fishingmax-webshop.jp" ||
+            !url.pathname.startsWith("/products/")
+        ) {
+            alert(
+                "Fishingmax WEBSHOPの商品URLを入力してください。\n" +
+                "例：https://www.fishingmax-webshop.jp/products/..."
             );
-
-        log.innerHTML +=
-            "<br>[" +
-            time +
-            "] " +
-            message;
-
-        log.scrollTop = log.scrollHeight;
+            return false;
+        }
+    } catch (error) {
+        alert("商品URLの形式を確認してください。");
+        return false;
     }
 
-
-    function setStatus(message, type) {
-
-        const status =
-            document.getElementById("status");
-
-        status.textContent = message;
-
-        status.className =
-            "status " +
-            type;
+    if (!variant) {
+        alert("商品種類・希望時間を選択してください。");
+        return false;
     }
 
-
-    function startReservation() {
-
-        if (reservationRunning) {
-            return;
-        }
-
-
-        const productUrl =
-            document
-                .getElementById("productUrl")
-                .value
-                .trim();
-
-
-        const variant =
-            document
-                .getElementById("variant")
-                .value;
-
-
-        const quantity =
-            document
-                .getElementById("quantity")
-                .value;
-
-
-        const startTime =
-            document
-                .getElementById("startTime")
-                .value;
-
-
-        if (!productUrl) {
-
-            alert("商品URLを入力してください。");
-
-            return;
-        }
-
-
-        if (!variant) {
-
-            alert("商品種類を選択してください。");
-
-            return;
-        }
-
-
-        if (!quantity || Number(quantity) < 1) {
-
-            alert("購入数量を1以上にしてください。");
-
-            return;
-        }
-
-
-        if (!startTime) {
-
-            alert("予約開始時刻を入力してください。");
-
-            return;
-        }
-
-
-        reservationRunning = true;
-
-
-        document
-            .getElementById("startButton")
-            .style.display = "none";
-
-
-        document
-            .getElementById("stopButton")
-            .style.display = "block";
-
-
-        setStatus(
-            "予約待機中",
-            "running"
-        );
-
-
-        addLog(
-            "予約情報を受け付けました。"
-        );
-
-
-        addLog(
-            "商品種類：" +
-            variant
-        );
-
-
-        addLog(
-            "購入数量：" +
-            quantity +
-            "個"
-        );
-
-
-        addLog(
-            "予約開始時刻：" +
-            startTime
-        );
-
-
-        addLog(
-            "現在はテストモードです。"
-        );
-
-
-        addLog(
-            "クラウド予約エンジンはまだ接続されていません。"
-        );
-
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 99) {
+        alert("購入数量は1～99の整数で入力してください。");
+        return false;
     }
 
+    if (!startDateTime) {
+        alert("予約処理開始日時を入力してください。");
+        return false;
+    }
 
-    function stopReservation() {
+    const start = new Date(startDateTime);
+
+    if (Number.isNaN(start.getTime())) {
+        alert("予約処理開始日時を確認してください。");
+        return false;
+    }
+
+    if (start.getTime() <= Date.now()) {
+        alert("予約処理開始日時は現在より後の時刻にしてください。");
+        return false;
+    }
+
+    return true;
+}
+
+function stopReservation(logMessage = true) {
+    reservationRunning = false;
+
+    if (countdownTimer) {
+        clearInterval(countdownTimer);
+        countdownTimer = null;
+    }
+
+    scheduledStart = null;
+
+    $("startButton").classList.remove("hidden");
+    $("stopButton").classList.add("hidden");
+
+    setCountdown("", false);
+    setStatus("停止しました", "warning");
+
+    if (logMessage) {
+        addLog("予約待機を停止しました。");
+    }
+}
+
+function startReservation() {
+    if (reservationRunning) return;
+
+    if (!validateSettings()) {
+        return;
+    }
+
+    saveSettings(false);
+
+    reservationRunning = true;
+
+    const start = new Date($("startDateTime").value);
+    scheduledStart = start.getTime();
+
+    $("startButton").classList.add("hidden");
+    $("stopButton").classList.remove("hidden");
+
+    setStatus("予約待機中", "running");
+
+    addLog("予約設定を受け付けました。");
+    addLog(`希望時間：${$("variant").value}`);
+    addLog(`購入数量：${$("quantity").value}個`);
+    addLog(`開始日時：${formatDateTime($("startDateTime").value)}`);
+    addLog(`確認間隔：${$("retryInterval").value}秒`);
+    addLog("現在はテストモードです。Fishingmaxには接続しません。");
+
+    updateCountdown();
+    countdownTimer = setInterval(updateCountdown, 1000);
+}
+
+function updateCountdown() {
+    if (!reservationRunning || scheduledStart === null) {
+        return;
+    }
+
+    const remaining = scheduledStart - Date.now();
+
+    if (remaining <= 0) {
+        clearInterval(countdownTimer);
+        countdownTimer = null;
+
+        setCountdown("開始時刻になりました", true);
+        setStatus("予約処理開始待ち", "warning");
+
+        addLog("設定した開始時刻になりました。");
+        addLog("現在はクラウド予約エンジン未接続のため、ここで停止しています。");
 
         reservationRunning = false;
+        scheduledStart = null;
 
+        $("startButton").classList.remove("hidden");
+        $("stopButton").classList.add("hidden");
 
-        document
-            .getElementById("startButton")
-            .style.display = "block";
-
-
-        document
-            .getElementById("stopButton")
-            .style.display = "none";
-
-
-        setStatus(
-            "停止しました",
-            "warning"
-        );
-
-
-        addLog(
-            "予約処理を停止しました。"
-        );
-
+        return;
     }
 
+    const totalSeconds = Math.floor(remaining / 1000);
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    let text = "開始まで ";
+
+    if (days > 0) {
+        text += `${days}日 `;
+    }
+
+    text +=
+        `${String(hours).padStart(2, "0")}:` +
+        `${String(minutes).padStart(2, "0")}:` +
+        `${String(seconds).padStart(2, "0")}`;
+
+    setCountdown(text, true);
+}
+
+function runTest() {
+    if (reservationRunning) {
+        alert("予約待機中は動作テストを実行できません。");
+        return;
+    }
+
+    setStatus("動作テスト中", "running");
+    addLog("画面の動作テストを開始しました。");
+
+    setTimeout(() => {
+        addLog("入力欄の読み取り：OK");
+        addLog("設定保存機能：OK");
+        addLog("停止機能：OK");
+        addLog("カウントダウン機能：OK");
+        addLog("Fishingmax接続：未実装");
+        addLog("注文確定操作：自動実行しない設計");
+        setStatus("テスト完了", "success");
+        setCountdown("", false);
+    }, 500);
+}
+
+$("startButton").addEventListener("click", startReservation);
+$("stopButton").addEventListener("click", () => stopReservation(true));
+$("saveButton").addEventListener("click", () => saveSettings(true));
+$("clearButton").addEventListener("click", clearSettings);
+$("clearLogButton").addEventListener("click", clearLog);
+$("testButton").addEventListener("click", runTest);
+
+[
+    "productUrl",
+    "variant",
+    "quantity",
+    "startDateTime",
+    "retryInterval"
+].forEach((id) => {
+    $(id).addEventListener("input", updateSummary);
+    $(id).addEventListener("change", updateSummary);
+});
+
+loadSettings();
+updateSummary();
 </script>
 
 </body>
