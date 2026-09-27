@@ -1,0 +1,44 @@
+name: Fishingmax Reservation Engine Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      product_url:
+        description: "Fishingmaxの商品URL"
+        required: true
+        type: string
+
+jobs:
+  browser-test:
+    name: Open Fishingmax with Playwright
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Fishingmax browser test
+        env:
+          PRODUCT_URL: ${{ inputs.product_url }}
+        run: npm start
+
+      - name: Upload test screenshot
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: fishingmax-browser-test
+          path: fishingmax-test.png
+          if-no-files-found: ignore
+          retention-days: 7
