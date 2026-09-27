@@ -42,6 +42,7 @@ jobs:
           path: |
             fishingmax-page.png
             fishingmax-page-report.json
+            fishingmax-element-details.json
             fishingmax-page-text.txt
           if-no-files-found: error
           retention-days: 7
