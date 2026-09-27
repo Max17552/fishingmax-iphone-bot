@@ -94,10 +94,6 @@ async function main() {
     console.log(`現在のURL: ${page.url()}`);
     console.log("");
 
-    // ------------------------------------------------------------
-    // 出船時間SELECT
-    // ------------------------------------------------------------
-
     const timeSelect = page.locator(
       'select[name="options[出船時間]"]'
     );
@@ -137,10 +133,6 @@ async function main() {
       );
     }
 
-    // ------------------------------------------------------------
-    // 在庫判定
-    // ------------------------------------------------------------
-
     console.log(`指定時間の表示: ${target.text}`);
 
     if (!target.text.includes("在庫：○")) {
@@ -151,10 +143,6 @@ async function main() {
 
     console.log("指定時間は在庫ありです。");
     console.log("");
-
-    // ------------------------------------------------------------
-    // 時間選択
-    // ------------------------------------------------------------
 
     await timeSelect.selectOption({
       value: desiredTime
@@ -171,10 +159,6 @@ async function main() {
     }
 
     console.log(`時間選択成功: ${selectedTime}`);
-
-    // ------------------------------------------------------------
-    // 数量設定
-    // ------------------------------------------------------------
 
     const quantityInput = page.locator(
       "#Quantity-template--27235294904633__main"
@@ -199,10 +183,6 @@ async function main() {
     console.log(`数量設定成功: ${selectedQuantity}`);
     console.log("");
 
-    // ------------------------------------------------------------
-    // バリアントID
-    // ------------------------------------------------------------
-
     const variantInput = page.locator(
       'input.product-variant-id[name="id"]'
     );
@@ -215,10 +195,6 @@ async function main() {
 
     console.log(`バリアントID: ${variantId}`);
     console.log("");
-
-    // ------------------------------------------------------------
-    // カートボタン
-    // ------------------------------------------------------------
 
     const cartButton = page.locator(
       "#ProductSubmitButton-template--27235294904633__main"
@@ -239,79 +215,45 @@ async function main() {
     console.log("カートボタンを確認しました。");
     console.log("");
 
-    // ------------------------------------------------------------
-    // ZenMarketモーダル対策
-    // ------------------------------------------------------------
+    console.log("ZenMarket等のオーバーレイを確認します。");
 
-    console.log("画面上のZenMarketモーダルを確認します。");
+    const overlayInfo = await page.evaluate(() => {
+      const modal = document.querySelector("#zl5F8304A2-modal");
 
-    const zenModal = page.locator(
-      "#zl5F8304A2-modal"
-    );
-
-    const zenModalCount = await zenModal.count();
+      return {
+        zenMarketModalExists: !!modal,
+        zenMarketModalVisible:
+          !!modal &&
+          getComputedStyle(modal).display !== "none" &&
+          getComputedStyle(modal).visibility !== "hidden"
+      };
+    });
 
     console.log(
-      `ZenMarketモーダル検出数: ${zenModalCount}`
+      `ZenMarketモーダル存在: ${overlayInfo.zenMarketModalExists}`
     );
 
-    if (zenModalCount > 0) {
-      console.log(
-        "ZenMarketモーダルを非表示にします。"
-      );
+    console.log(
+      `ZenMarketモーダル表示中: ${overlayInfo.zenMarketModalVisible}`
+    );
 
-      await page.addStyleTag({
-        content: `
-          #zl5F8304A2-modal,
-          [class*="zl5F8304A2"] {
-            display: none !important;
-            visibility: hidden !important;
-            pointer-events: none !important;
-          }
-        `
-      });
-
-      await page.evaluate(() => {
-        document
-          .querySelectorAll(
-            "#zl5F8304A2-modal, [class*='zl5F8304A2']"
-          )
-          .forEach((element) => {
-            element.style.display = "none";
-            element.style.visibility = "hidden";
-            element.style.pointerEvents = "none";
-          });
-      });
-
-      await page.waitForTimeout(200);
-    }
-
-    console.log("カートボタン周辺のモーダル対策: OK");
     console.log("");
 
-    // ------------------------------------------------------------
-    // カート投入
-    // ------------------------------------------------------------
-
-    console.log("これからカート投入を実行します。");
+    console.log("カートボタンを実行します。");
 
     await cartButton.scrollIntoViewIfNeeded();
 
     await cartButton.click({
+      force: true,
       timeout: 10000
     });
 
     console.log("カート投入操作を実行しました。");
 
-    // Shopify側の処理を待つ
-    await page.waitForTimeout(2500);
+    await page.waitForTimeout(3000);
 
     console.log("");
     console.log(`カート投入後URL: ${page.url()}`);
-
-    // ------------------------------------------------------------
-    // カート状態確認
-    // ------------------------------------------------------------
 
     const bodyText = await page.locator("body").innerText();
 
@@ -323,13 +265,17 @@ async function main() {
       'a[href*="/checkout"]'
     ).count();
 
-    const cartButtonAfter = await page.locator(
-      'a[href*="/cart"], button, input[type="submit"]'
+    const relevantElements = await page.locator(
+      'a[href*="/cart"], a[href*="/checkout"], button, input[type="submit"]'
     ).evaluateAll((elements) =>
       elements
         .map((element) => ({
           tag: element.tagName,
-          text: (element.innerText || element.value || "").trim(),
+          text: (
+            element.innerText ||
+            element.value ||
+            ""
+          ).trim(),
           href: element.href || ""
         }))
         .filter((item) =>
@@ -337,12 +283,8 @@ async function main() {
             `${item.text} ${item.href}`
           )
         )
-        .slice(0, 30)
+        .slice(0, 50)
     );
-
-    // ------------------------------------------------------------
-    // 結果保存
-    // ------------------------------------------------------------
 
     fs.writeFileSync(
       "fishingmax-cart-test.json",
@@ -364,11 +306,13 @@ async function main() {
             variantId
           },
 
+          overlay: overlayInfo,
+
           afterCart: {
             url: page.url(),
             cartLinks,
             checkoutLinks,
-            relevantElements: cartButtonAfter,
+            relevantElements,
             bodyTextPreview: bodyText.substring(0, 15000)
           },
 
