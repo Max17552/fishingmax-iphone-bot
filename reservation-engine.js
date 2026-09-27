@@ -1,11 +1,11 @@
 const { chromium } = require("playwright");
 const fs = require("fs");
 
-const ENGINE_VERSION = "2026-09-27-cart-v5";
+const ENGINE_VERSION = "2026-09-27-cart-v6";
 
 const POLL_INTERVAL_MS = 500;
 const PAGE_LOAD_TIMEOUT = 30000;
-const CHECKOUT_TIMEOUT = 30000;
+const CART_VERIFY_TIMEOUT = 10000;
 
 function validateProductUrl(productUrl) {
   if (!productUrl) {
@@ -109,67 +109,180 @@ async function waitForStock(page, desiredTime) {
   }
 }
 
-async function findCartButton(page) {
-  const exactSelector =
-    "#ProductSubmitButton-template--27235294904633__main";
+async function addToCartByApi(
+  page,
+  variantId,
+  quantity
+) {
+  console.log("");
+  console.log(
+    "ShopifyカートAPIへ商品を追加します。"
+  );
 
-  const exactButton =
-    page.locator(exactSelector);
+  const result =
+    await page.evaluate(
+      async ({ variantId, quantity }) => {
+        const response =
+          await fetch("/cart/add.js", {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/x-www-form-urlencoded; charset=UTF-8",
+              "Accept":
+                "application/json"
+            },
+            body:
+              new URLSearchParams({
+                id: String(variantId),
+                quantity: String(quantity)
+              }).toString()
+          });
 
-  if (await exactButton.count() === 1) {
-    return {
-      locator: exactButton,
-      method: "known-selector"
-    };
-  }
+        const text =
+          await response.text();
 
-  const selectors = [
-    'button[name="add"]',
-    'button[type="submit"]',
-    'input[type="submit"]',
-    'button:has-text("カートに入れる")',
-    'button:has-text("カートに追加")',
-    'input[value*="カートに入れる"]',
-    'input[value*="カートに追加"]'
-  ];
+        let data = null;
 
-  for (const selector of selectors) {
-    const locator =
-      page.locator(selector);
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = {
+            raw: text
+          };
+        }
 
-    const count =
-      await locator.count();
-
-    for (let i = 0; i < count; i++) {
-      const candidate =
-        locator.nth(i);
-
-      if (
-        await candidate.isVisible()
-          .catch(() => false)
-      ) {
         return {
-          locator: candidate,
-          method: selector
+          ok: response.ok,
+          status: response.status,
+          data
         };
+      },
+      {
+        variantId,
+        quantity
       }
-    }
+    );
+
+  console.log(
+    `カートAPI HTTPステータス: ${result.status}`
+  );
+
+  if (!result.ok) {
+    throw new Error(
+      `カートAPIによる商品追加に失敗しました。HTTP ${result.status}`
+    );
   }
 
-  return null;
+  console.log(
+    "カートAPIへの追加リクエストが成功しました。"
+  );
+
+  return result;
 }
 
-async function findCartCheckoutButton(page) {
+async function getCart(page) {
+  return await page.evaluate(
+    async () => {
+      const response =
+        await fetch("/cart.js", {
+          method: "GET",
+          headers: {
+            "Accept": "application/json"
+          },
+          cache: "no-store"
+        });
+
+      const text =
+        await response.text();
+
+      let data = null;
+
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = {
+          raw: text
+        };
+      }
+
+      return {
+        ok: response.ok,
+        status: response.status,
+        data
+      };
+    }
+  );
+}
+
+async function verifyCart(
+  page,
+  variantId,
+  quantity
+) {
+  const deadline =
+    Date.now() + CART_VERIFY_TIMEOUT;
+
+  while (Date.now() < deadline) {
+    const cart =
+      await getCart(page);
+
+    if (!cart.ok) {
+      throw new Error(
+        `カート確認APIに失敗しました。HTTP ${cart.status}`
+      );
+    }
+
+    const items =
+      Array.isArray(cart.data.items)
+        ? cart.data.items
+        : [];
+
+    const matchingItems =
+      items.filter(
+        item =>
+          String(item.variant_id) ===
+          String(variantId)
+      );
+
+    const totalQuantity =
+      matchingItems.reduce(
+        (sum, item) =>
+          sum + Number(item.quantity || 0),
+        0
+      );
+
+    console.log(
+      `カート確認: 商品数=${items.length} / 対象商品の数量=${totalQuantity}`
+    );
+
+    if (
+      totalQuantity >= quantity
+    ) {
+      console.log(
+        "カートへの実追加を確認しました。"
+      );
+
+      return cart.data;
+    }
+
+    await page.waitForTimeout(250);
+  }
+
+  throw new Error(
+    "カートAPIは成功しましたが、/cart.jsで対象商品を確認できませんでした。"
+  );
+}
+
+async function findCheckoutButton(page) {
   const selectors = [
     'button[name="checkout"]',
     'input[name="checkout"]',
-    'button[type="submit"]',
     'button:has-text("ご購入手続きへ")',
     'button:has-text("購入手続きへ")',
     'button:has-text("チェックアウト")',
     'input[value*="ご購入手続きへ"]',
     'input[value*="購入手続きへ"]',
-    'a[href*="/checkout"]'
+    'button[type="submit"]'
   ];
 
   for (const selector of selectors) {
@@ -187,7 +300,13 @@ async function findCartCheckoutButton(page) {
         await candidate.isVisible()
           .catch(() => false)
       ) {
-        return candidate;
+        const disabled =
+          await candidate.isDisabled()
+            .catch(() => false);
+
+        if (!disabled) {
+          return candidate;
+        }
       }
     }
   }
@@ -195,13 +314,13 @@ async function findCartCheckoutButton(page) {
   return null;
 }
 
-async function waitForCartCheckoutButton(page) {
+async function waitForCheckoutButton(page) {
   const deadline =
-    Date.now() + CHECKOUT_TIMEOUT;
+    Date.now() + 15000;
 
   while (Date.now() < deadline) {
     const button =
-      await findCartCheckoutButton(page);
+      await findCheckoutButton(page);
 
     if (button) {
       return button;
@@ -248,10 +367,11 @@ async function findFinalOrderButtons(page) {
         continue;
       }
 
-      const text = (
-        await candidate.innerText()
-          .catch(() => "")
-      ).trim();
+      const text =
+        (
+          await candidate.innerText()
+            .catch(() => "")
+        ).trim();
 
       const value =
         await candidate
@@ -451,89 +571,82 @@ async function main() {
           .inputValue();
     }
 
+    if (!variantId) {
+      throw new Error(
+        "バリアントIDを取得できませんでした。"
+      );
+    }
+
     console.log(
       `バリアントID: ${variantId}`
     );
 
     console.log("");
 
-    console.log(
-      "カートボタンを検索します。"
+    /*
+     * ここからカート投入。
+     *
+     * これまでの
+     *
+     *   cartButton.click()
+     *
+     * では、画面上の操作は成功しても
+     * 実際のShopifyカートに商品が入っていない
+     * ケースが確認された。
+     *
+     * そのため、Shopifyのcart/add.jsを使用する。
+     */
+
+    await addToCartByApi(
+      page,
+      variantId,
+      quantity
     );
-
-    const cart =
-      await findCartButton(page);
-
-    if (!cart) {
-      throw new Error(
-        "カートボタンを特定できませんでした。"
-      );
-    }
-
-    const cartButtonId =
-      await cart.locator
-        .getAttribute("id")
-        .catch(() => null);
-
-    const cartButtonText =
-      (
-        await cart.locator
-          .innerText()
-          .catch(() => "")
-      ).trim();
-
-    console.log(
-      `カートボタン検出方法: ${cart.method}`
-    );
-
-    console.log(
-      `カートボタンID: ${cartButtonId}`
-    );
-
-    console.log(
-      `カートボタン文字: ${cartButtonText}`
-    );
-
-    if (
-      await cart.locator.isDisabled()
-    ) {
-      throw new Error(
-        "カートボタンが無効になっています。"
-      );
-    }
 
     console.log("");
 
     console.log(
-      "カート投入を実行します。"
+      "カートへの実追加を検証します。"
     );
 
-    await cart.locator
-      .scrollIntoViewIfNeeded();
+    const verifiedCart =
+      await verifyCart(
+        page,
+        variantId,
+        quantity
+      );
 
-    await cart.locator.click({
-      force: true,
-      timeout: 10000
-    });
+    fs.writeFileSync(
+      "fishingmax-cart-verified.json",
+      JSON.stringify(
+        {
+          engineVersion:
+            ENGINE_VERSION,
+
+          verified: true,
+
+          variantId,
+
+          quantity,
+
+          items:
+            verifiedCart.items || [],
+
+          itemCount:
+            verifiedCart.item_count,
+
+          total:
+            verifiedCart.total_price
+        },
+        null,
+        2
+      ),
+      "utf8"
+    );
 
     console.log(
-      "カート投入操作を実行しました。"
+      "カート内容の検証に成功しました。"
     );
-
-    await page.waitForTimeout(2000);
-
-    const cartUrlAfterAdd =
-      page.url();
-
-    console.log(
-      `カート投入後URL: ${cartUrlAfterAdd}`
-    );
-
-    await page.screenshot({
-      path:
-        "fishingmax-cart-added.png",
-      fullPage: true
-    });
 
     console.log("");
 
@@ -544,18 +657,15 @@ async function main() {
     const origin =
       new URL(productUrl).origin;
 
-    const cartUrl =
-      `${origin}/cart`;
-
     await page.goto(
-      cartUrl,
+      `${origin}/cart`,
       {
         waitUntil: "domcontentloaded",
         timeout: PAGE_LOAD_TIMEOUT
       }
     );
 
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(1000);
 
     console.log(
       `カートページURL: ${page.url()}`
@@ -578,20 +688,38 @@ async function main() {
       fullPage: true
     });
 
+    /*
+     * 念のため、/cartページでも
+     * 対象商品が表示されていることを確認。
+     */
+
+    const cartPageHasTarget =
+      cartPageText.includes(
+        "岸和田渡船"
+      );
+
+    console.log(
+      `カートページ商品表示: ${
+        cartPageHasTarget
+          ? "確認"
+          : "未確認"
+      }`
+    );
+
     console.log("");
 
     console.log(
-      "カートページの「ご購入手続きへ」を検索します。"
+      "「ご購入手続きへ」を検索します。"
     );
 
     const checkoutButton =
-      await waitForCartCheckoutButton(
+      await waitForCheckoutButton(
         page
       );
 
     if (!checkoutButton) {
       throw new Error(
-        "カートページで「ご購入手続きへ」ボタンを検出できませんでした。"
+        "カートには商品を確認できましたが、「ご購入手続きへ」ボタンを検出できませんでした。"
       );
     }
 
@@ -683,13 +811,11 @@ async function main() {
 
           cart: {
             submitted: true,
-            buttonMethod: cart.method,
-            buttonId: cartButtonId,
-            buttonText: cartButtonText,
-            urlAfterCartAdd:
-              cartUrlAfterAdd,
-            cartPageUrl:
-              page.url()
+            verified: true,
+            itemCount:
+              verifiedCart.item_count,
+            url:
+              `${origin}/cart`
           },
 
           checkout: {
