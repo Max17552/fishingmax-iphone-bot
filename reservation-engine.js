@@ -74,13 +74,15 @@ async function waitForStock(page, desiredTime) {
       );
     }
 
-    const available = target.text.includes("在庫：○");
+    const available =
+      target.text.includes("在庫：○") &&
+      !target.disabled;
 
     console.log(
       `[監視 ${attempt}] ${target.text}`
     );
 
-    if (available && !target.disabled) {
+    if (available) {
       console.log(
         `指定時間 ${desiredTime} の在庫を検出しました。`
       );
@@ -101,63 +103,6 @@ async function waitForStock(page, desiredTime) {
 
     await page.waitForTimeout(100);
   }
-}
-
-async function submitCartForm(page) {
-  const result = await page.evaluate(() => {
-    const form =
-      document.querySelector(
-        'form[action*="/cart/add"]'
-      ) ||
-      document.querySelector(
-        'form[id*="product-form"]'
-      );
-
-    if (!form) {
-      return {
-        ok: false,
-        reason: "cart form not found"
-      };
-    }
-
-    const submitButton =
-      form.querySelector(
-        'button[name="add"]'
-      ) ||
-      form.querySelector(
-        'button[type="submit"]'
-      );
-
-    if (!submitButton) {
-      return {
-        ok: false,
-        reason: "submit button not found"
-      };
-    }
-
-    if (typeof form.requestSubmit === "function") {
-      form.requestSubmit(submitButton);
-    } else {
-      submitButton.click();
-    }
-
-    return {
-      ok: true,
-      formAction: form.action,
-      variantId:
-        form.querySelector(
-          'input[name="id"]'
-        )?.value || null
-    };
-  });
-
-  if (!result.ok) {
-    throw new Error(
-      `カートフォーム送信に失敗しました: ${result.reason}`
-    );
-  }
-
-  return result;
 }
 
 async function findCheckoutButton(page) {
@@ -223,7 +168,6 @@ async function findFinalOrderButton(page) {
 
   for (const selector of selectors) {
     const locator = page.locator(selector);
-
     const count = await locator.count();
 
     for (let i = 0; i < count; i++) {
@@ -305,10 +249,6 @@ async function main() {
 
     page = await context.newPage();
 
-    // ------------------------------------------------------------
-    // 商品ページ
-    // ------------------------------------------------------------
-
     await page.goto(productUrl, {
       waitUntil: "domcontentloaded",
       timeout: PAGE_LOAD_TIMEOUT
@@ -320,10 +260,6 @@ async function main() {
     console.log(`タイトル: ${await page.title()}`);
     console.log("");
 
-    // ------------------------------------------------------------
-    // 在庫監視
-    // ------------------------------------------------------------
-
     const stockResult =
       await waitForStock(
         page,
@@ -332,10 +268,6 @@ async function main() {
 
     const timeSelect =
       stockResult.timeSelect;
-
-    // ------------------------------------------------------------
-    // 時間選択
-    // ------------------------------------------------------------
 
     await timeSelect.selectOption({
       value: desiredTime
@@ -355,10 +287,6 @@ async function main() {
     console.log(
       `時間選択成功: ${selectedTime}`
     );
-
-    // ------------------------------------------------------------
-    // 数量
-    // ------------------------------------------------------------
 
     const quantityInput =
       page.locator(
@@ -391,10 +319,6 @@ async function main() {
       `数量設定成功: ${selectedQuantity}`
     );
 
-    // ------------------------------------------------------------
-    // バリアントID
-    // ------------------------------------------------------------
-
     const variantInput =
       page.locator(
         'input.product-variant-id[name="id"]'
@@ -415,46 +339,83 @@ async function main() {
       `バリアントID: ${variantId}`
     );
 
-    // ------------------------------------------------------------
-    // カート投入
-    // ------------------------------------------------------------
+    const cartButton =
+      page.locator(
+        "#ProductSubmitButton-template--27235294904633__main"
+      );
+
+    if (await cartButton.count() !== 1) {
+      throw new Error(
+        "カートボタンを特定できませんでした。"
+      );
+    }
+
+    if (await cartButton.isDisabled()) {
+      throw new Error(
+        "カートボタンが無効になっています。"
+      );
+    }
+
+    console.log("");
+    console.log(
+      "カートボタンを確認しました。"
+    );
+
+    const overlayInfo =
+      await page.evaluate(() => {
+        const modal =
+          document.querySelector(
+            "#zl5F8304A2-modal"
+          );
+
+        return {
+          zenMarketModalExists: !!modal,
+          zenMarketModalVisible:
+            !!modal &&
+            getComputedStyle(modal).display !== "none" &&
+            getComputedStyle(modal).visibility !== "hidden"
+        };
+      });
+
+    console.log(
+      `ZenMarketモーダル存在: ${overlayInfo.zenMarketModalExists}`
+    );
+
+    console.log(
+      `ZenMarketモーダル表示中: ${overlayInfo.zenMarketModalVisible}`
+    );
 
     console.log("");
     console.log(
       "カート投入を実行します。"
     );
 
-    const cartResult =
-      await submitCartForm(page);
+    await cartButton.scrollIntoViewIfNeeded();
+
+    await cartButton.click({
+      force: true,
+      timeout: 10000
+    });
 
     console.log(
-      `カートフォーム: ${cartResult.formAction}`
+      "カート投入操作を実行しました。"
     );
 
-    await page.waitForTimeout(1800);
+    await page.waitForTimeout(2500);
 
-    // ------------------------------------------------------------
-    // カート投入確認
-    // ------------------------------------------------------------
+    const cartUrl = page.url();
+
+    console.log(
+      `カート投入後URL: ${cartUrl}`
+    );
 
     const cartText =
       await page.locator("body").innerText();
 
-    const cartScreenshot =
-      "fishingmax-cart-added.png";
-
     await page.screenshot({
-      path: cartScreenshot,
+      path: "fishingmax-cart-added.png",
       fullPage: true
     });
-
-    console.log(
-      `カート投入後URL: ${page.url()}`
-    );
-
-    // ------------------------------------------------------------
-    // ご購入手続きへ
-    // ------------------------------------------------------------
 
     console.log("");
     console.log(
@@ -492,10 +453,6 @@ async function main() {
       );
     }
 
-    // ------------------------------------------------------------
-    // 購入手続きへ進む
-    // ------------------------------------------------------------
-
     console.log("");
     console.log(
       "購入手続き画面へ進みます。"
@@ -506,15 +463,13 @@ async function main() {
       timeout: 10000
     });
 
-    await page.waitForTimeout(2500);
+    await page.waitForTimeout(3000);
+
+    const checkoutUrl = page.url();
 
     console.log(
-      `購入手続き後URL: ${page.url()}`
+      `購入手続き後URL: ${checkoutUrl}`
     );
-
-    // ------------------------------------------------------------
-    // 最終注文ボタン検出
-    // ------------------------------------------------------------
 
     console.log("");
     console.log(
@@ -528,10 +483,6 @@ async function main() {
       finalButtons.map(
         (item) => item.text
       );
-
-    // ------------------------------------------------------------
-    // 最終状態保存
-    // ------------------------------------------------------------
 
     const finalText =
       await page.locator("body").innerText();
@@ -562,19 +513,20 @@ async function main() {
 
           cart: {
             submitted: true,
-            urlAfterCart: page.url()
+            urlAfterCart: cartUrl
           },
 
           checkout: {
             reached: true,
             checkoutButtonText: checkoutText,
             checkoutHref,
+            urlAfterCheckout: checkoutUrl,
             finalOrderButtonsDetected:
               finalButtonInfo
           },
 
           finalState: {
-            url: page.url(),
+            url: checkoutUrl,
             pageTextPreview:
               finalText.substring(0, 20000)
           },
@@ -615,7 +567,11 @@ async function main() {
     );
 
     console.log(
-      `最終URL: ${page.url()}`
+      `カート投入後URL: ${cartUrl}`
+    );
+
+    console.log(
+      `購入手続き後URL: ${checkoutUrl}`
     );
 
     console.log(
@@ -625,11 +581,6 @@ async function main() {
     console.log("");
     console.log(
       "【停止】注文確定ボタンはクリックしていません。"
-    );
-
-    console.log("");
-    console.log(
-      "この時点で処理を終了します。"
     );
 
   } catch (error) {
