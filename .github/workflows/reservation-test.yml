@@ -30,9 +30,27 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run Fishingmax browser test
+        id: fishingmax-test
         env:
           PRODUCT_URL: ${{ inputs.product_url }}
-        run: npm start
+        run: |
+          npm start 2>&1 | tee fishingmax-run.log
+          exit ${PIPESTATUS[0]}
+
+      - name: Show generated files
+        if: always()
+        run: |
+          echo "========================================"
+          echo "現在のディレクトリ"
+          echo "========================================"
+          pwd
+          echo ""
+
+          echo "========================================"
+          echo "生成ファイル"
+          echo "========================================"
+          find . -maxdepth 2 -type f | sort
+          echo ""
 
       - name: Upload Fishingmax page inspection results
         if: always()
@@ -40,9 +58,14 @@ jobs:
         with:
           name: fishingmax-page-inspection
           path: |
+            fishingmax-run.log
+            fishingmax-error.txt
+            fishingmax-error-page-url.txt
+            fishingmax-error-page.png
+            fishingmax-error-page-text.txt
             fishingmax-page.png
             fishingmax-page-report.json
             fishingmax-element-details.json
             fishingmax-page-text.txt
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 7
