@@ -41,7 +41,7 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Run Fishingmax selection test
+      - name: Run Fishingmax cart test
         id: fishingmax-test
         env:
           PRODUCT_URL: ${{ inputs.product_url }}
@@ -55,28 +55,23 @@ jobs:
         if: always()
         run: |
           echo "========================================"
-          echo "現在のディレクトリ"
-          echo "========================================"
-          pwd
-          echo ""
-
-          echo "========================================"
           echo "生成ファイル"
           echo "========================================"
           find . -maxdepth 2 -type f | sort
-          echo ""
 
-      - name: Upload Fishingmax test results
+      - name: Upload Fishingmax cart test results
         if: always()
         uses: actions/upload-artifact@v5
         with:
-          name: fishingmax-selection-test
+          name: fishingmax-cart-test
           path: |
             fishingmax-run.log
             fishingmax-error.txt
             fishingmax-error-page.png
-            fishingmax-selection-test.json
-            fishingmax-selection-test.png
+            fishingmax-error-page-url.txt
+            fishingmax-error-page-text.txt
+            fishingmax-cart-test.json
+            fishingmax-cart-test.png
             fishingmax-page-text.txt
           if-no-files-found: warn
           retention-days: 7
