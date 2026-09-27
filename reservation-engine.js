@@ -35,8 +35,6 @@ function validateProductUrl(productUrl) {
 
 async function main() {
   const productUrl = process.env.PRODUCT_URL;
-
-  // 今回のテスト設定
   const desiredTime = process.env.DESIRED_TIME || "11時00分";
   const desiredQuantity = process.env.DESIRED_QUANTITY || "1";
 
@@ -46,29 +44,25 @@ async function main() {
 
   try {
     console.log("========================================");
-    console.log("Fishingmax 選択操作テスト");
+    console.log("Fishingmax カート投入テスト");
     console.log("========================================");
     console.log("");
 
     console.log(`商品URL: ${productUrl}`);
-    console.log(`希望時間: ${desiredTime}`);
-    console.log(`希望数量: ${desiredQuantity}`);
+    console.log(`指定時間: ${desiredTime}`);
+    console.log(`指定数量: ${desiredQuantity}`);
     console.log("");
 
     validateProductUrl(productUrl);
 
-    const quantityNumber = Number(desiredQuantity);
+    const quantity = Number(desiredQuantity);
 
-    if (!Number.isInteger(quantityNumber) || quantityNumber < 1) {
+    if (!Number.isInteger(quantity) || quantity < 1) {
       throw new Error(
-        "DESIRED_QUANTITY は1以上の整数で指定してください。"
+        "DESIRED_QUANTITY は1以上の整数にしてください。"
       );
     }
 
-    console.log("設定値の検証: OK");
-    console.log("");
-
-    // ブラウザ起動
     browser = await chromium.launch({
       headless: true
     });
@@ -84,7 +78,7 @@ async function main() {
 
     page = await context.newPage();
 
-    console.log("Fishingmaxの商品ページへアクセスします。");
+    console.log("商品ページへアクセスします。");
 
     const response = await page.goto(productUrl, {
       waitUntil: "domcontentloaded",
@@ -93,243 +87,217 @@ async function main() {
 
     await page.waitForTimeout(3000);
 
-    const httpStatus = response ? response.status() : null;
-
-    console.log(`HTTPステータス: ${httpStatus}`);
+    console.log(`HTTPステータス: ${response ? response.status() : "不明"}`);
     console.log(`ページタイトル: ${await page.title()}`);
     console.log(`現在のURL: ${page.url()}`);
     console.log("");
 
-    // ============================================================
-    // 出船時間SELECTを特定
-    // ============================================================
+    // ------------------------------------------------------------
+    // 指定時間のSELECT
+    // ------------------------------------------------------------
 
     const timeSelect = page.locator(
       'select[name="options[出船時間]"]'
     );
 
-    const timeSelectCount = await timeSelect.count();
-
-    console.log(
-      `出船時間SELECT検出数: ${timeSelectCount}`
-    );
-
-    if (timeSelectCount !== 1) {
+    if (await timeSelect.count() !== 1) {
       throw new Error(
-        `出船時間SELECTを正しく特定できませんでした。検出数=${timeSelectCount}`
+        "出船時間のSELECTを1つ特定できませんでした。"
       );
     }
 
-    // 利用可能な選択肢を確認
-    const timeOptions = await timeSelect.locator("option").evaluateAll(
-      (options) => {
-        return options.map((option) => ({
-          text: option.textContent.trim(),
-          value: option.value,
-          selected: option.selected,
-          disabled: option.disabled
-        }));
-      }
+    const options = await timeSelect.locator("option").evaluateAll(
+      (elements) =>
+        elements.map((element) => ({
+          text: element.textContent.trim(),
+          value: element.value,
+          disabled: element.disabled
+        }))
     );
 
-    console.log("---------- 出船時間の選択肢 ----------");
+    console.log("---------- 出船時間 ----------");
 
-    timeOptions.forEach((option) => {
+    options.forEach((option) => {
       console.log(
-        `text="${option.text}" value="${option.value}" selected=${option.selected} disabled=${option.disabled}`
+        `text="${option.text}" value="${option.value}" disabled=${option.disabled}`
       );
     });
 
     console.log("");
 
-    const targetOption = timeOptions.find(
+    const target = options.find(
       (option) => option.value === desiredTime
     );
 
-    if (!targetOption) {
+    if (!target) {
       throw new Error(
-        `希望時間「${desiredTime}」は商品ページに存在しません。`
+        `指定時間「${desiredTime}」が見つかりません。`
       );
     }
 
-    if (targetOption.disabled) {
+    // ------------------------------------------------------------
+    // 在庫判定
+    // ------------------------------------------------------------
+
+    const targetText = target.text;
+
+    console.log(`指定時間の表示: ${targetText}`);
+
+    if (!targetText.includes("在庫：○")) {
       throw new Error(
-        `希望時間「${desiredTime}」は選択肢として無効になっています。`
+        `指定時間「${desiredTime}」は現在「${targetText}」です。`
       );
     }
 
-    // ============================================================
-    // 出船時間を選択
-    // ============================================================
+    console.log("指定時間は在庫ありです。");
+    console.log("");
 
-    console.log(
-      `出船時間「${desiredTime}」を選択します。`
-    );
+    // ------------------------------------------------------------
+    // 時間選択
+    // ------------------------------------------------------------
 
     await timeSelect.selectOption({
       value: desiredTime
     });
 
-    // Shopify側のバリアント更新処理を待つ
     await page.waitForTimeout(1000);
 
     const selectedTime = await timeSelect.inputValue();
 
-    console.log(
-      `選択後の出船時間: ${selectedTime}`
-    );
-
     if (selectedTime !== desiredTime) {
       throw new Error(
-        `出船時間の選択に失敗しました。期待値=${desiredTime} 実際=${selectedTime}`
+        `時間選択に失敗しました。期待=${desiredTime} 実際=${selectedTime}`
       );
     }
 
-    console.log("出船時間の選択: OK");
-    console.log("");
+    console.log(`時間選択成功: ${selectedTime}`);
 
-    // ============================================================
-    // 数量入力
-    // ============================================================
+    // ------------------------------------------------------------
+    // 数量設定
+    // ------------------------------------------------------------
 
     const quantityInput = page.locator(
       "#Quantity-template--27235294904633__main"
     );
 
-    const quantityCount = await quantityInput.count();
-
-    console.log(
-      `数量入力欄検出数: ${quantityCount}`
-    );
-
-    if (quantityCount !== 1) {
+    if (await quantityInput.count() !== 1) {
       throw new Error(
-        `数量入力欄を正しく特定できませんでした。検出数=${quantityCount}`
+        "数量入力欄を特定できませんでした。"
       );
     }
 
-    console.log(
-      `数量を ${quantityNumber} に設定します。`
-    );
-
-    await quantityInput.fill(String(quantityNumber));
+    await quantityInput.fill(String(quantity));
 
     const selectedQuantity = await quantityInput.inputValue();
 
-    console.log(
-      `設定後の数量: ${selectedQuantity}`
-    );
-
-    if (selectedQuantity !== String(quantityNumber)) {
+    if (selectedQuantity !== String(quantity)) {
       throw new Error(
-        `数量設定に失敗しました。期待値=${quantityNumber} 実際=${selectedQuantity}`
+        `数量設定に失敗しました。期待=${quantity} 実際=${selectedQuantity}`
       );
     }
 
-    console.log("数量設定: OK");
+    console.log(`数量設定成功: ${selectedQuantity}`);
     console.log("");
 
-    // ============================================================
-    // hidden variant ID確認
-    // ============================================================
+    // ------------------------------------------------------------
+    // バリアントID
+    // ------------------------------------------------------------
 
     const variantInput = page.locator(
       'input.product-variant-id[name="id"]'
     );
 
-    const variantCount = await variantInput.count();
-
-    console.log(
-      `商品バリアントID入力欄検出数: ${variantCount}`
-    );
-
     let variantId = null;
 
-    if (variantCount > 0) {
+    if (await variantInput.count() > 0) {
       variantId = await variantInput.first().inputValue();
-
-      console.log(
-        `選択後の商品バリアントID: ${variantId}`
-      );
-    } else {
-      console.log(
-        "商品バリアントID入力欄は検出されませんでした。"
-      );
     }
 
+    console.log(`バリアントID: ${variantId}`);
     console.log("");
 
-    // ============================================================
-    // カートボタンの状態だけ確認
-    // ============================================================
+    // ------------------------------------------------------------
+    // カートボタン
+    // ------------------------------------------------------------
 
     const cartButton = page.locator(
       "#ProductSubmitButton-template--27235294904633__main"
     );
 
-    const cartButtonCount = await cartButton.count();
-
-    console.log(
-      `カートボタン検出数: ${cartButtonCount}`
-    );
-
-    let cartButtonDisabled = null;
-    let cartButtonText = null;
-
-    if (cartButtonCount === 1) {
-      cartButtonDisabled = await cartButton.isDisabled();
-      cartButtonText = await cartButton.innerText();
-
-      console.log(`カートボタン: ${cartButtonText}`);
-      console.log(
-        `カートボタンdisabled: ${cartButtonDisabled}`
+    if (await cartButton.count() !== 1) {
+      throw new Error(
+        "カートボタンを特定できませんでした。"
       );
     }
 
+    if (await cartButton.isDisabled()) {
+      throw new Error(
+        "カートボタンが無効になっています。"
+      );
+    }
+
+    console.log("カートボタンを確認しました。");
     console.log("");
+    console.log("これからカート投入を実行します。");
 
-    // ============================================================
-    // 現在の状態を保存
-    // ============================================================
+    // ------------------------------------------------------------
+    // カート投入
+    // ------------------------------------------------------------
 
-    const result = {
-      testType: "Fishingmax 選択操作テスト",
-      checkedAt: new Date().toISOString(),
+    await cartButton.click();
 
-      productUrl,
-      httpStatus,
+    console.log("カート投入操作を実行しました。");
 
-      requested: {
-        time: desiredTime,
-        quantity: quantityNumber
-      },
+    // Shopify側の処理・画面遷移を待つ
+    await page.waitForTimeout(2000);
 
-      actual: {
-        time: selectedTime,
-        quantity: selectedQuantity,
-        variantId
-      },
+    console.log("");
+    console.log(`カート投入後URL: ${page.url()}`);
 
-      cartButton: {
-        detected: cartButtonCount === 1,
-        text: cartButtonText,
-        disabled: cartButtonDisabled
-      },
+    // ------------------------------------------------------------
+    // カート状態確認
+    // ------------------------------------------------------------
 
-      availableTimeOptions: timeOptions,
+    const cartLinks = await page.locator(
+      'a[href*="/cart"]'
+    ).count();
 
-      importantNote:
-        "カート投入・購入手続き・注文確定は実行していません。"
-    };
+    const bodyText = await page.locator("body").innerText();
 
     fs.writeFileSync(
-      "fishingmax-selection-test.json",
-      JSON.stringify(result, null, 2),
+      "fishingmax-cart-test.json",
+      JSON.stringify(
+        {
+          testType: "Fishingmax カート投入テスト",
+          checkedAt: new Date().toISOString(),
+
+          productUrl,
+
+          requested: {
+            time: desiredTime,
+            quantity
+          },
+
+          actual: {
+            time: selectedTime,
+            quantity: selectedQuantity,
+            variantId
+          },
+
+          afterCart: {
+            url: page.url(),
+            cartLinks,
+            bodyTextPreview: bodyText.substring(0, 10000)
+          },
+
+          safety:
+            "カート投入まで実行。注文確定操作は実行していません。"
+        },
+        null,
+        2
+      ),
       "utf8"
     );
-
-    // 本文も保存
-    const bodyText = await page.locator("body").innerText();
 
     fs.writeFileSync(
       "fishingmax-page-text.txt",
@@ -337,38 +305,32 @@ async function main() {
       "utf8"
     );
 
-    // 選択後の画面を保存
     await page.screenshot({
-      path: "fishingmax-selection-test.png",
+      path: "fishingmax-cart-test.png",
       fullPage: true
     });
 
+    console.log("");
     console.log("========================================");
-    console.log("選択操作テスト完了");
+    console.log("カート投入テスト完了");
     console.log("========================================");
     console.log("");
 
     console.log("結果:");
-    console.log(`出船時間: ${selectedTime}`);
+    console.log(`時間: ${selectedTime}`);
     console.log(`数量: ${selectedQuantity}`);
-    console.log(`商品バリアントID: ${variantId}`);
+    console.log(`バリアントID: ${variantId}`);
+    console.log(`カート投入後URL: ${page.url()}`);
     console.log("");
 
-    console.log("カート投入は実行していません。");
-    console.log("注文処理は実行していません。");
     console.log("注文確定は実行していません。");
-    console.log("");
-
-    console.log("保存ファイル:");
-    console.log("- fishingmax-selection-test.json");
-    console.log("- fishingmax-page-text.txt");
-    console.log("- fishingmax-selection-test.png");
 
   } catch (error) {
+
     fs.writeFileSync(
       "fishingmax-error.txt",
       [
-        "Fishingmax Selection Test Error",
+        "Fishingmax Cart Test Error",
         "========================================",
         "",
         `日時: ${new Date().toISOString()}`,
@@ -384,18 +346,33 @@ async function main() {
 
     if (page) {
       try {
+        fs.writeFileSync(
+          "fishingmax-error-page-url.txt",
+          page.url(),
+          "utf8"
+        );
+      } catch {}
+
+      try {
         await page.screenshot({
           path: "fishingmax-error-page.png",
           fullPage: true
         });
-      } catch {
-        // 無視
-      }
+      } catch {}
+
+      try {
+        fs.writeFileSync(
+          "fishingmax-error-page-text.txt",
+          await page.locator("body").innerText(),
+          "utf8"
+        );
+      } catch {}
     }
 
     throw error;
 
   } finally {
+
     if (context) {
       await context.close();
     }
@@ -403,13 +380,14 @@ async function main() {
     if (browser) {
       await browser.close();
     }
+
   }
 }
 
 main().catch((error) => {
   console.error("");
   console.error("========================================");
-  console.error("選択操作テストでエラーが発生しました");
+  console.error("カート投入テストでエラーが発生しました");
   console.error("========================================");
   console.error(error.message);
   console.error("");
