@@ -36,37 +36,43 @@ function validateProductUrl(productUrl) {
 async function main() {
   const productUrl = process.env.PRODUCT_URL;
 
+  // 今回のテスト設定
+  const desiredTime = process.env.DESIRED_TIME || "11時00分";
+  const desiredQuantity = process.env.DESIRED_QUANTITY || "1";
+
   let browser = null;
   let context = null;
   let page = null;
 
   try {
     console.log("========================================");
-    console.log("Fishingmax 商品ページ詳細調査テスト");
+    console.log("Fishingmax 選択操作テスト");
     console.log("========================================");
     console.log("");
 
-    console.log("PRODUCT_URL:");
-    console.log(productUrl || "(未指定)");
+    console.log(`商品URL: ${productUrl}`);
+    console.log(`希望時間: ${desiredTime}`);
+    console.log(`希望数量: ${desiredQuantity}`);
     console.log("");
 
-    // URLチェック
     validateProductUrl(productUrl);
 
-    console.log("URL検証: OK");
+    const quantityNumber = Number(desiredQuantity);
+
+    if (!Number.isInteger(quantityNumber) || quantityNumber < 1) {
+      throw new Error(
+        "DESIRED_QUANTITY は1以上の整数で指定してください。"
+      );
+    }
+
+    console.log("設定値の検証: OK");
     console.log("");
 
     // ブラウザ起動
-    console.log("Playwright Chromiumを起動します。");
-
     browser = await chromium.launch({
       headless: true
     });
 
-    console.log("ブラウザ起動: OK");
-    console.log("");
-
-    // Browser Context
     context = await browser.newContext({
       locale: "ja-JP",
       timezoneId: "Asia/Tokyo",
@@ -76,281 +82,254 @@ async function main() {
       }
     });
 
-    console.log("Browser Context作成: OK");
-    console.log("");
-
     page = await context.newPage();
 
-    console.log("ページ作成: OK");
-    console.log("");
-
-    // Fishingmaxへアクセス
     console.log("Fishingmaxの商品ページへアクセスします。");
-    console.log(productUrl);
-    console.log("");
 
     const response = await page.goto(productUrl, {
       waitUntil: "domcontentloaded",
       timeout: 30000
     });
 
-    console.log("page.goto: OK");
-    console.log("");
-
     await page.waitForTimeout(3000);
 
     const httpStatus = response ? response.status() : null;
-    const pageTitle = await page.title();
-    const currentUrl = page.url();
 
-    console.log("---------- 基本情報 ----------");
     console.log(`HTTPステータス: ${httpStatus}`);
-    console.log(`ページタイトル: ${pageTitle}`);
-    console.log(`現在のURL: ${currentUrl}`);
+    console.log(`ページタイトル: ${await page.title()}`);
+    console.log(`現在のURL: ${page.url()}`);
     console.log("");
 
     // ============================================================
-    // SELECT
+    // 出船時間SELECTを特定
     // ============================================================
 
-    console.log("SELECT情報を取得します。");
+    const timeSelect = page.locator(
+      'select[name="options[出船時間]"]'
+    );
 
-    const selects = await page.locator("select").evaluateAll((elements) => {
-      return elements.map((element, index) => ({
-        index: index + 1,
-        id: element.id,
-        name: element.name,
-        className: element.className,
-        value: element.value,
-        disabled: element.disabled,
-        required: element.required,
-        ariaLabel: element.getAttribute("aria-label"),
-        options: Array.from(element.options).map((option) => ({
+    const timeSelectCount = await timeSelect.count();
+
+    console.log(
+      `出船時間SELECT検出数: ${timeSelectCount}`
+    );
+
+    if (timeSelectCount !== 1) {
+      throw new Error(
+        `出船時間SELECTを正しく特定できませんでした。検出数=${timeSelectCount}`
+      );
+    }
+
+    // 利用可能な選択肢を確認
+    const timeOptions = await timeSelect.locator("option").evaluateAll(
+      (options) => {
+        return options.map((option) => ({
           text: option.textContent.trim(),
           value: option.value,
           selected: option.selected,
           disabled: option.disabled
-        }))
-      }));
+        }));
+      }
+    );
+
+    console.log("---------- 出船時間の選択肢 ----------");
+
+    timeOptions.forEach((option) => {
+      console.log(
+        `text="${option.text}" value="${option.value}" selected=${option.selected} disabled=${option.disabled}`
+      );
     });
 
-    console.log(`SELECT検出数: ${selects.length}`);
     console.log("");
 
-    selects.forEach((select) => {
-      console.log(`SELECT #${select.index}`);
-      console.log(`  id: ${select.id}`);
-      console.log(`  name: ${select.name}`);
-      console.log(`  class: ${select.className}`);
-      console.log(`  value: ${select.value}`);
-      console.log(`  disabled: ${select.disabled}`);
-      console.log(`  required: ${select.required}`);
-      console.log(`  aria-label: ${select.ariaLabel}`);
+    const targetOption = timeOptions.find(
+      (option) => option.value === desiredTime
+    );
 
-      console.log("  options:");
+    if (!targetOption) {
+      throw new Error(
+        `希望時間「${desiredTime}」は商品ページに存在しません。`
+      );
+    }
 
-      select.options.forEach((option, optionIndex) => {
-        console.log(
-          `    ${optionIndex + 1}. text="${option.text}" value="${option.value}" selected=${option.selected} disabled=${option.disabled}`
-        );
-      });
+    if (targetOption.disabled) {
+      throw new Error(
+        `希望時間「${desiredTime}」は選択肢として無効になっています。`
+      );
+    }
 
-      console.log("");
+    // ============================================================
+    // 出船時間を選択
+    // ============================================================
+
+    console.log(
+      `出船時間「${desiredTime}」を選択します。`
+    );
+
+    await timeSelect.selectOption({
+      value: desiredTime
     });
 
-    // ============================================================
-    // INPUT
-    // ============================================================
+    // Shopify側のバリアント更新処理を待つ
+    await page.waitForTimeout(1000);
 
-    console.log("INPUT情報を取得します。");
+    const selectedTime = await timeSelect.inputValue();
 
-    const inputs = await page.locator("input").evaluateAll((elements) => {
-      return elements.map((element, index) => ({
-        index: index + 1,
-        type: element.type,
-        id: element.id,
-        name: element.name,
-        className: element.className,
-        value: element.value,
-        placeholder: element.placeholder,
-        min: element.getAttribute("min"),
-        max: element.getAttribute("max"),
-        step: element.getAttribute("step"),
-        disabled: element.disabled,
-        required: element.required,
-        checked: element.checked,
-        ariaLabel: element.getAttribute("aria-label")
-      }));
-    });
+    console.log(
+      `選択後の出船時間: ${selectedTime}`
+    );
 
-    console.log(`INPUT検出数: ${inputs.length}`);
-    console.log("");
+    if (selectedTime !== desiredTime) {
+      throw new Error(
+        `出船時間の選択に失敗しました。期待値=${desiredTime} 実際=${selectedTime}`
+      );
+    }
 
-    inputs.forEach((input) => {
-      console.log(`INPUT #${input.index}`);
-      console.log(`  type: ${input.type}`);
-      console.log(`  id: ${input.id}`);
-      console.log(`  name: ${input.name}`);
-      console.log(`  class: ${input.className}`);
-      console.log(`  value: ${input.value}`);
-      console.log(`  placeholder: ${input.placeholder}`);
-      console.log(`  min: ${input.min}`);
-      console.log(`  max: ${input.max}`);
-      console.log(`  step: ${input.step}`);
-      console.log(`  disabled: ${input.disabled}`);
-      console.log(`  required: ${input.required}`);
-      console.log(`  checked: ${input.checked}`);
-      console.log(`  aria-label: ${input.ariaLabel}`);
-      console.log("");
-    });
-
-    // ============================================================
-    // BUTTON
-    // ============================================================
-
-    console.log("BUTTON情報を取得します。");
-
-    const buttons = await page.locator("button").evaluateAll((elements) => {
-      return elements.map((element, index) => ({
-        index: index + 1,
-        text: element.innerText.trim(),
-        id: element.id,
-        name: element.name,
-        type: element.type,
-        className: element.className,
-        value: element.value,
-        disabled: element.disabled,
-        ariaLabel: element.getAttribute("aria-label"),
-        title: element.getAttribute("title")
-      }));
-    });
-
-    console.log(`BUTTON検出数: ${buttons.length}`);
-    console.log("");
-
-    buttons.forEach((button) => {
-      console.log(`BUTTON #${button.index}`);
-      console.log(`  text: ${button.text}`);
-      console.log(`  id: ${button.id}`);
-      console.log(`  name: ${button.name}`);
-      console.log(`  type: ${button.type}`);
-      console.log(`  class: ${button.className}`);
-      console.log(`  value: ${button.value}`);
-      console.log(`  disabled: ${button.disabled}`);
-      console.log(`  aria-label: ${button.ariaLabel}`);
-      console.log(`  title: ${button.title}`);
-      console.log("");
-    });
-
-    // ============================================================
-    // LABEL
-    // ============================================================
-
-    console.log("LABEL情報を取得します。");
-
-    const labels = await page.locator("label").evaluateAll((elements) => {
-      return elements.map((element, index) => ({
-        index: index + 1,
-        text: element.innerText.trim(),
-        htmlFor: element.htmlFor,
-        className: element.className
-      }));
-    });
-
-    console.log(`LABEL検出数: ${labels.length}`);
-    console.log("");
-
-    labels.forEach((label) => {
-      console.log(`LABEL #${label.index}`);
-      console.log(`  text: ${label.text}`);
-      console.log(`  for: ${label.htmlFor}`);
-      console.log(`  class: ${label.className}`);
-      console.log("");
-    });
-
-    // ============================================================
-    // FORM
-    // ============================================================
-
-    console.log("FORM情報を取得します。");
-
-    const forms = await page.locator("form").evaluateAll((elements) => {
-      return elements.map((element, index) => ({
-        index: index + 1,
-        id: element.id,
-        name: element.name,
-        action: element.action,
-        method: element.method,
-        className: element.className
-      }));
-    });
-
-    console.log(`FORM検出数: ${forms.length}`);
-    console.log("");
-
-    forms.forEach((form) => {
-      console.log(`FORM #${form.index}`);
-      console.log(`  id: ${form.id}`);
-      console.log(`  name: ${form.name}`);
-      console.log(`  action: ${form.action}`);
-      console.log(`  method: ${form.method}`);
-      console.log(`  class: ${form.className}`);
-      console.log("");
-    });
-
-    // ============================================================
-    // 本文
-    // ============================================================
-
-    console.log("ページ本文を取得します。");
-
-    const bodyText = await page.locator("body").innerText();
-
-    console.log(`本文文字数: ${bodyText.length}`);
+    console.log("出船時間の選択: OK");
     console.log("");
 
     // ============================================================
-    // レポート
+    // 数量入力
     // ============================================================
 
-    const report = {
-      testType: "Fishingmax商品ページ詳細調査テスト",
+    const quantityInput = page.locator(
+      "#Quantity-template--27235294904633__main"
+    );
+
+    const quantityCount = await quantityInput.count();
+
+    console.log(
+      `数量入力欄検出数: ${quantityCount}`
+    );
+
+    if (quantityCount !== 1) {
+      throw new Error(
+        `数量入力欄を正しく特定できませんでした。検出数=${quantityCount}`
+      );
+    }
+
+    console.log(
+      `数量を ${quantityNumber} に設定します。`
+    );
+
+    await quantityInput.fill(String(quantityNumber));
+
+    const selectedQuantity = await quantityInput.inputValue();
+
+    console.log(
+      `設定後の数量: ${selectedQuantity}`
+    );
+
+    if (selectedQuantity !== String(quantityNumber)) {
+      throw new Error(
+        `数量設定に失敗しました。期待値=${quantityNumber} 実際=${selectedQuantity}`
+      );
+    }
+
+    console.log("数量設定: OK");
+    console.log("");
+
+    // ============================================================
+    // hidden variant ID確認
+    // ============================================================
+
+    const variantInput = page.locator(
+      'input.product-variant-id[name="id"]'
+    );
+
+    const variantCount = await variantInput.count();
+
+    console.log(
+      `商品バリアントID入力欄検出数: ${variantCount}`
+    );
+
+    let variantId = null;
+
+    if (variantCount > 0) {
+      variantId = await variantInput.first().inputValue();
+
+      console.log(
+        `選択後の商品バリアントID: ${variantId}`
+      );
+    } else {
+      console.log(
+        "商品バリアントID入力欄は検出されませんでした。"
+      );
+    }
+
+    console.log("");
+
+    // ============================================================
+    // カートボタンの状態だけ確認
+    // ============================================================
+
+    const cartButton = page.locator(
+      "#ProductSubmitButton-template--27235294904633__main"
+    );
+
+    const cartButtonCount = await cartButton.count();
+
+    console.log(
+      `カートボタン検出数: ${cartButtonCount}`
+    );
+
+    let cartButtonDisabled = null;
+    let cartButtonText = null;
+
+    if (cartButtonCount === 1) {
+      cartButtonDisabled = await cartButton.isDisabled();
+      cartButtonText = await cartButton.innerText();
+
+      console.log(`カートボタン: ${cartButtonText}`);
+      console.log(
+        `カートボタンdisabled: ${cartButtonDisabled}`
+      );
+    }
+
+    console.log("");
+
+    // ============================================================
+    // 現在の状態を保存
+    // ============================================================
+
+    const result = {
+      testType: "Fishingmax 選択操作テスト",
       checkedAt: new Date().toISOString(),
+
       productUrl,
       httpStatus,
-      pageTitle,
-      currentUrl,
 
-      elementCounts: {
-        links: await page.locator("a").count(),
-        buttons: buttons.length,
-        inputs: inputs.length,
-        selects: selects.length,
-        textareas: await page.locator("textarea").count(),
-        labels: labels.length,
-        forms: forms.length
+      requested: {
+        time: desiredTime,
+        quantity: quantityNumber
       },
 
-      selects,
-      inputs,
-      buttons,
-      labels,
-      forms,
+      actual: {
+        time: selectedTime,
+        quantity: selectedQuantity,
+        variantId
+      },
 
-      bodyTextPreview: bodyText.substring(0, 15000)
+      cartButton: {
+        detected: cartButtonCount === 1,
+        text: cartButtonText,
+        disabled: cartButtonDisabled
+      },
+
+      availableTimeOptions: timeOptions,
+
+      importantNote:
+        "カート投入・購入手続き・注文確定は実行していません。"
     };
 
     fs.writeFileSync(
-      "fishingmax-element-details.json",
-      JSON.stringify(report, null, 2),
+      "fishingmax-selection-test.json",
+      JSON.stringify(result, null, 2),
       "utf8"
     );
 
-    fs.writeFileSync(
-      "fishingmax-page-report.json",
-      JSON.stringify(report, null, 2),
-      "utf8"
-    );
+    // 本文も保存
+    const bodyText = await page.locator("body").innerText();
 
     fs.writeFileSync(
       "fishingmax-page-text.txt",
@@ -358,86 +337,59 @@ async function main() {
       "utf8"
     );
 
-    // スクリーンショット
+    // 選択後の画面を保存
     await page.screenshot({
-      path: "fishingmax-page.png",
+      path: "fishingmax-selection-test.png",
       fullPage: true
     });
 
     console.log("========================================");
-    console.log("商品ページ詳細調査テスト成功");
+    console.log("選択操作テスト完了");
     console.log("========================================");
     console.log("");
-    console.log("保存ファイル:");
-    console.log("- fishingmax-element-details.json");
-    console.log("- fishingmax-page-report.json");
-    console.log("- fishingmax-page-text.txt");
-    console.log("- fishingmax-page.png");
+
+    console.log("結果:");
+    console.log(`出船時間: ${selectedTime}`);
+    console.log(`数量: ${selectedQuantity}`);
+    console.log(`商品バリアントID: ${variantId}`);
     console.log("");
 
+    console.log("カート投入は実行していません。");
+    console.log("注文処理は実行していません。");
+    console.log("注文確定は実行していません。");
+    console.log("");
+
+    console.log("保存ファイル:");
+    console.log("- fishingmax-selection-test.json");
+    console.log("- fishingmax-page-text.txt");
+    console.log("- fishingmax-selection-test.png");
+
   } catch (error) {
-
-    // エラー内容をファイルに保存
-    const errorText = [
-      "Fishingmax Playwright Test Error",
-      "========================================",
-      "",
-      `日時: ${new Date().toISOString()}`,
-      "",
-      "エラー名:",
-      error && error.name ? error.name : "(不明)",
-      "",
-      "エラーメッセージ:",
-      error && error.message ? error.message : "(不明)",
-      "",
-      "スタックトレース:",
-      error && error.stack ? error.stack : "(なし)",
-      ""
-    ].join("\n");
-
     fs.writeFileSync(
       "fishingmax-error.txt",
-      errorText,
+      [
+        "Fishingmax Selection Test Error",
+        "========================================",
+        "",
+        `日時: ${new Date().toISOString()}`,
+        "",
+        "エラー:",
+        error.message,
+        "",
+        "Stack:",
+        error.stack || ""
+      ].join("\n"),
       "utf8"
     );
 
-    console.error("");
-    console.error("========================================");
-    console.error("Fishingmaxテスト中にエラーが発生しました");
-    console.error("========================================");
-    console.error(errorText);
-
-    // ページまで作成できていた場合は診断情報を保存
     if (page) {
-      try {
-        fs.writeFileSync(
-          "fishingmax-error-page-url.txt",
-          page.url(),
-          "utf8"
-        );
-      } catch {
-        // 診断保存自体の失敗は無視
-      }
-
       try {
         await page.screenshot({
           path: "fishingmax-error-page.png",
           fullPage: true
         });
       } catch {
-        // スクリーンショット失敗は無視
-      }
-
-      try {
-        const errorPageText = await page.locator("body").innerText();
-
-        fs.writeFileSync(
-          "fishingmax-error-page-text.txt",
-          errorPageText,
-          "utf8"
-        );
-      } catch {
-        // 本文取得失敗は無視
+        // 無視
       }
     }
 
@@ -456,7 +408,9 @@ async function main() {
 
 main().catch((error) => {
   console.error("");
-  console.error("最終エラー:");
+  console.error("========================================");
+  console.error("選択操作テストでエラーが発生しました");
+  console.error("========================================");
   console.error(error.message);
   console.error("");
 
