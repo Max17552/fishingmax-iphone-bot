@@ -87,13 +87,15 @@ async function main() {
 
     await page.waitForTimeout(3000);
 
-    console.log(`HTTPステータス: ${response ? response.status() : "不明"}`);
+    console.log(
+      `HTTPステータス: ${response ? response.status() : "不明"}`
+    );
     console.log(`ページタイトル: ${await page.title()}`);
     console.log(`現在のURL: ${page.url()}`);
     console.log("");
 
     // ------------------------------------------------------------
-    // 指定時間のSELECT
+    // 出船時間SELECT
     // ------------------------------------------------------------
 
     const timeSelect = page.locator(
@@ -139,13 +141,11 @@ async function main() {
     // 在庫判定
     // ------------------------------------------------------------
 
-    const targetText = target.text;
+    console.log(`指定時間の表示: ${target.text}`);
 
-    console.log(`指定時間の表示: ${targetText}`);
-
-    if (!targetText.includes("在庫：○")) {
+    if (!target.text.includes("在庫：○")) {
       throw new Error(
-        `指定時間「${desiredTime}」は現在「${targetText}」です。`
+        `指定時間「${desiredTime}」は現在「${target.text}」です。`
       );
     }
 
@@ -238,18 +238,73 @@ async function main() {
 
     console.log("カートボタンを確認しました。");
     console.log("");
-    console.log("これからカート投入を実行します。");
+
+    // ------------------------------------------------------------
+    // ZenMarketモーダル対策
+    // ------------------------------------------------------------
+
+    console.log("画面上のZenMarketモーダルを確認します。");
+
+    const zenModal = page.locator(
+      "#zl5F8304A2-modal"
+    );
+
+    const zenModalCount = await zenModal.count();
+
+    console.log(
+      `ZenMarketモーダル検出数: ${zenModalCount}`
+    );
+
+    if (zenModalCount > 0) {
+      console.log(
+        "ZenMarketモーダルを非表示にします。"
+      );
+
+      await page.addStyleTag({
+        content: `
+          #zl5F8304A2-modal,
+          [class*="zl5F8304A2"] {
+            display: none !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+          }
+        `
+      });
+
+      await page.evaluate(() => {
+        document
+          .querySelectorAll(
+            "#zl5F8304A2-modal, [class*='zl5F8304A2']"
+          )
+          .forEach((element) => {
+            element.style.display = "none";
+            element.style.visibility = "hidden";
+            element.style.pointerEvents = "none";
+          });
+      });
+
+      await page.waitForTimeout(200);
+    }
+
+    console.log("カートボタン周辺のモーダル対策: OK");
+    console.log("");
 
     // ------------------------------------------------------------
     // カート投入
     // ------------------------------------------------------------
 
-    await cartButton.click();
+    console.log("これからカート投入を実行します。");
+
+    await cartButton.scrollIntoViewIfNeeded();
+
+    await cartButton.click({
+      timeout: 10000
+    });
 
     console.log("カート投入操作を実行しました。");
 
-    // Shopify側の処理・画面遷移を待つ
-    await page.waitForTimeout(2000);
+    // Shopify側の処理を待つ
+    await page.waitForTimeout(2500);
 
     console.log("");
     console.log(`カート投入後URL: ${page.url()}`);
@@ -258,11 +313,36 @@ async function main() {
     // カート状態確認
     // ------------------------------------------------------------
 
+    const bodyText = await page.locator("body").innerText();
+
     const cartLinks = await page.locator(
       'a[href*="/cart"]'
     ).count();
 
-    const bodyText = await page.locator("body").innerText();
+    const checkoutLinks = await page.locator(
+      'a[href*="/checkout"]'
+    ).count();
+
+    const cartButtonAfter = await page.locator(
+      'a[href*="/cart"], button, input[type="submit"]'
+    ).evaluateAll((elements) =>
+      elements
+        .map((element) => ({
+          tag: element.tagName,
+          text: (element.innerText || element.value || "").trim(),
+          href: element.href || ""
+        }))
+        .filter((item) =>
+          /カート|購入|チェックアウト|注文|checkout/i.test(
+            `${item.text} ${item.href}`
+          )
+        )
+        .slice(0, 30)
+    );
+
+    // ------------------------------------------------------------
+    // 結果保存
+    // ------------------------------------------------------------
 
     fs.writeFileSync(
       "fishingmax-cart-test.json",
@@ -287,7 +367,9 @@ async function main() {
           afterCart: {
             url: page.url(),
             cartLinks,
-            bodyTextPreview: bodyText.substring(0, 10000)
+            checkoutLinks,
+            relevantElements: cartButtonAfter,
+            bodyTextPreview: bodyText.substring(0, 15000)
           },
 
           safety:
@@ -316,11 +398,12 @@ async function main() {
     console.log("========================================");
     console.log("");
 
-    console.log("結果:");
     console.log(`時間: ${selectedTime}`);
     console.log(`数量: ${selectedQuantity}`);
     console.log(`バリアントID: ${variantId}`);
     console.log(`カート投入後URL: ${page.url()}`);
+    console.log(`Cartリンク数: ${cartLinks}`);
+    console.log(`Checkoutリンク数: ${checkoutLinks}`);
     console.log("");
 
     console.log("注文確定は実行していません。");
