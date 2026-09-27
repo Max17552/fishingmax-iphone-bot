@@ -1,7 +1,7 @@
 const { chromium } = require("playwright");
 const fs = require("fs");
 
-const ENGINE_VERSION = "2026-09-27-cart-v4";
+const ENGINE_VERSION = "2026-09-27-cart-v5";
 
 const POLL_INTERVAL_MS = 500;
 const PAGE_LOAD_TIMEOUT = 30000;
@@ -65,7 +65,6 @@ async function getTargetTime(page, desiredTime) {
 
   return {
     select,
-    options,
     target
   };
 }
@@ -160,43 +159,17 @@ async function findCartButton(page) {
   return null;
 }
 
-async function getButtonDiagnostics(page) {
-  return await page.locator(
-    "button, input[type='submit'], input[type='button']"
-  ).evaluateAll(elements =>
-    elements.map((element, index) => ({
-      index,
-      tag: element.tagName,
-      id: element.id || "",
-      name: element.getAttribute("name") || "",
-      type: element.getAttribute("type") || "",
-      text: (
-        element.innerText ||
-        element.value ||
-        ""
-      ).trim(),
-      disabled: !!element.disabled,
-      visible:
-        !!(
-          element.offsetWidth ||
-          element.offsetHeight ||
-          element.getClientRects().length
-        )
-    }))
-  );
-}
-
-async function findCheckoutButton(page) {
+async function findCartCheckoutButton(page) {
   const selectors = [
-    'a[href*="/checkout"]',
     'button[name="checkout"]',
     'input[name="checkout"]',
+    'button[type="submit"]',
     'button:has-text("ご購入手続きへ")',
-    'a:has-text("ご購入手続きへ")',
     'button:has-text("購入手続きへ")',
-    'a:has-text("購入手続きへ")',
     'button:has-text("チェックアウト")',
-    'a:has-text("チェックアウト")'
+    'input[value*="ご購入手続きへ"]',
+    'input[value*="購入手続きへ"]',
+    'a[href*="/checkout"]'
   ];
 
   for (const selector of selectors) {
@@ -222,13 +195,13 @@ async function findCheckoutButton(page) {
   return null;
 }
 
-async function waitForCheckoutButton(page) {
+async function waitForCartCheckoutButton(page) {
   const deadline =
     Date.now() + CHECKOUT_TIMEOUT;
 
   while (Date.now() < deadline) {
     const button =
-      await findCheckoutButton(page);
+      await findCartCheckoutButton(page);
 
     if (button) {
       return button;
@@ -286,13 +259,13 @@ async function findFinalOrderButtons(page) {
           .catch(() => null);
 
       const combined =
-        `${text} ${value || ""}`;
+        `${text} ${value || ""}`.trim();
 
       if (
         /注文を確定|購入を確定|注文する|購入する/
           .test(combined)
       ) {
-        results.push(combined.trim());
+        results.push(combined);
       }
     }
   }
@@ -334,12 +307,15 @@ async function main() {
     console.log(
       "========================================"
     );
+
     console.log(
       "Fishingmax 完成系予約エンジン"
     );
+
     console.log(
       `ENGINE VERSION: ${ENGINE_VERSION}`
     );
+
     console.log(
       "========================================"
     );
@@ -489,27 +465,10 @@ async function main() {
       await findCartButton(page);
 
     if (!cart) {
-      const diagnostics =
-        await getButtonDiagnostics(page);
-
-      fs.writeFileSync(
-        "fishingmax-button-diagnostics.json",
-        JSON.stringify(
-          diagnostics,
-          null,
-          2
-        ),
-        "utf8"
-      );
-
       throw new Error(
-        "カートボタンを特定できませんでした。fishingmax-button-diagnostics.jsonを確認してください。"
+        "カートボタンを特定できませんでした。"
       );
     }
-
-    console.log(
-      `カートボタン検出方法: ${cart.method}`
-    );
 
     const cartButtonId =
       await cart.locator
@@ -522,6 +481,10 @@ async function main() {
           .innerText()
           .catch(() => "")
       ).trim();
+
+    console.log(
+      `カートボタン検出方法: ${cart.method}`
+    );
 
     console.log(
       `カートボタンID: ${cartButtonId}`
@@ -557,19 +520,14 @@ async function main() {
       "カート投入操作を実行しました。"
     );
 
-    await page.waitForTimeout(2500);
+    await page.waitForTimeout(2000);
 
-    const cartUrl =
+    const cartUrlAfterAdd =
       page.url();
 
     console.log(
-      `カート投入後URL: ${cartUrl}`
+      `カート投入後URL: ${cartUrlAfterAdd}`
     );
-
-    const cartPageText =
-      await page.locator(
-        "body"
-      ).innerText();
 
     await page.screenshot({
       path:
@@ -580,17 +538,60 @@ async function main() {
     console.log("");
 
     console.log(
-      "「ご購入手続きへ」を検索します。"
+      "カートページへ移動します。"
+    );
+
+    const origin =
+      new URL(productUrl).origin;
+
+    const cartUrl =
+      `${origin}/cart`;
+
+    await page.goto(
+      cartUrl,
+      {
+        waitUntil: "domcontentloaded",
+        timeout: PAGE_LOAD_TIMEOUT
+      }
+    );
+
+    await page.waitForTimeout(1500);
+
+    console.log(
+      `カートページURL: ${page.url()}`
+    );
+
+    const cartPageText =
+      await page.locator(
+        "body"
+      ).innerText();
+
+    fs.writeFileSync(
+      "fishingmax-cart-page-text.txt",
+      cartPageText,
+      "utf8"
+    );
+
+    await page.screenshot({
+      path:
+        "fishingmax-cart-page.png",
+      fullPage: true
+    });
+
+    console.log("");
+
+    console.log(
+      "カートページの「ご購入手続きへ」を検索します。"
     );
 
     const checkoutButton =
-      await waitForCheckoutButton(
+      await waitForCartCheckoutButton(
         page
       );
 
     if (!checkoutButton) {
       throw new Error(
-        "「ご購入手続きへ」ボタンを検出できませんでした。"
+        "カートページで「ご購入手続きへ」ボタンを検出できませんでした。"
       );
     }
 
@@ -627,7 +628,7 @@ async function main() {
       timeout: 10000
     });
 
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(4000);
 
     const checkoutUrl =
       page.url();
@@ -685,14 +686,19 @@ async function main() {
             buttonMethod: cart.method,
             buttonId: cartButtonId,
             buttonText: cartButtonText,
-            urlAfterCart: cartUrl
+            urlAfterCartAdd:
+              cartUrlAfterAdd,
+            cartPageUrl:
+              page.url()
           },
 
           checkout: {
             reached: true,
-            buttonText: checkoutText,
-            href: checkoutHref,
-            urlAfterCheckout:
+            buttonText:
+              checkoutText,
+            href:
+              checkoutHref,
+            url:
               checkoutUrl,
             finalOrderButtons:
               finalButtons
@@ -735,6 +741,18 @@ async function main() {
 
     console.log(
       "========================================"
+    );
+
+    console.log(
+      `指定時間: ${selectedTime}`
+    );
+
+    console.log(
+      `数量: ${selectedQuantity}`
+    );
+
+    console.log(
+      `バリアントID: ${variantId}`
     );
 
     console.log(
