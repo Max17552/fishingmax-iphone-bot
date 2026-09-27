@@ -1,0 +1,13 @@
+{
+  "name": "fishingmax-iphone-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Fishingmax reservation automation engine",
+  "main": "reservation-engine.js",
+  "scripts": {
+    "start": "node reservation-engine.js"
+  },
+  "dependencies": {
+    "playwright": "^1.63.0"
+  }
+}
