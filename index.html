@@ -409,7 +409,6 @@ select:focus {
             <input id="startDateTime" type="datetime-local" step="1">
             <div class="help">
                 この時刻になったら予約処理を開始する設定です。
-                現在はテスト画面のため、Fishingmaxへは接続しません。
             </div>
         </div>
 
@@ -483,10 +482,10 @@ select:focus {
 
         <div class="notice">
             <strong>現在の動作について</strong>
-            この画面は予約システムの操作部分です。現在はクラウド予約エンジン未接続のため、
-            Fishingmaxへの自動アクセス・在庫確認・注文操作は行いません。
-            hCaptcha等の認証が必要になった場合は、今後も手動対応を前提とします。
-            また、最終的な「注文を確定」操作は自動実行しない設計にします。
+            Cloudflare Workerを経由してGitHub Actionsの予約エンジンを起動します。
+            GitHub ActionsではFishingmaxの商品ページを開き、指定時間の在庫確認、
+            カート追加、購入手続き画面への移動までを行います。
+            最終的な「注文を確定」操作は自動実行しません。
         </div>
     </section>
 
@@ -499,6 +498,9 @@ select:focus {
 "use strict";
 
 const STORAGE_KEY = "fishingmaxReservationSettings";
+
+const WORKER_URL =
+    "https://fishingmax-action-proxy.hiroki-fujika.workers.dev/";
 
 let reservationRunning = false;
 let countdownTimer = null;
@@ -517,6 +519,7 @@ function nowText() {
 function addLog(message) {
     const log = $("log");
     const line = `[${nowText()}] ${message}`;
+
     log.textContent += (log.textContent ? "\n" : "") + line;
     log.scrollTop = log.scrollHeight;
 }
@@ -528,21 +531,28 @@ function clearLog() {
 
 function setStatus(message, type) {
     const status = $("status");
+
     status.textContent = message;
     status.className = "status " + type;
 }
 
 function setCountdown(message, visible = true) {
     const countdown = $("countdown");
+
     countdown.textContent = message;
     countdown.classList.toggle("hidden", !visible);
 }
 
 function formatDateTime(value) {
-    if (!value) return "未設定";
+    if (!value) {
+        return "未設定";
+    }
 
     const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
+
+    if (Number.isNaN(date.getTime())) {
+        return value;
+    }
 
     return date.toLocaleString("ja-JP", {
         year: "numeric",
@@ -584,7 +594,11 @@ function saveSettings(showLog = true) {
         retryInterval: $("retryInterval").value
     };
 
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(settings)
+    );
+
     updateSummary();
 
     if (showLog) {
@@ -603,14 +617,24 @@ function loadSettings() {
     try {
         const settings = JSON.parse(raw);
 
-        $("productUrl").value = settings.productUrl || "";
-        $("variant").value = settings.variant || "";
-        $("quantity").value = settings.quantity || "1";
-        $("startDateTime").value = settings.startDateTime || "";
-        $("retryInterval").value = settings.retryInterval || "2";
+        $("productUrl").value =
+            settings.productUrl || "";
+
+        $("variant").value =
+            settings.variant || "";
+
+        $("quantity").value =
+            settings.quantity || "1";
+
+        $("startDateTime").value =
+            settings.startDateTime || "";
+
+        $("retryInterval").value =
+            settings.retryInterval || "2";
 
         updateSummary();
-        addLog("保存済みの設定を読み込みました。");
+
+        addLog("保存済みの設定を読み込みました.");
     } catch (error) {
         updateSummary();
         addLog("保存済み設定の読み込みに失敗しました。");
@@ -631,14 +655,22 @@ function clearSettings() {
     $("retryInterval").value = "2";
 
     updateSummary();
+
     addLog("保存済み設定を消去しました。");
 }
 
 function validateSettings() {
-    const productUrl = $("productUrl").value.trim();
-    const variant = $("variant").value;
-    const quantity = Number($("quantity").value);
-    const startDateTime = $("startDateTime").value;
+    const productUrl =
+        $("productUrl").value.trim();
+
+    const variant =
+        $("variant").value;
+
+    const quantity =
+        Number($("quantity").value);
+
+    const startDateTime =
+        $("startDateTime").value;
 
     if (!productUrl) {
         alert("商品URLを入力してください。");
@@ -657,6 +689,7 @@ function validateSettings() {
                 "Fishingmax WEBSHOPの商品URLを入力してください。\n" +
                 "例：https://www.fishingmax-webshop.jp/products/..."
             );
+
             return false;
         }
     } catch (error) {
@@ -669,7 +702,11 @@ function validateSettings() {
         return false;
     }
 
-    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 99) {
+    if (
+        !Number.isInteger(quantity) ||
+        quantity < 1 ||
+        quantity > 99
+    ) {
         alert("購入数量は1～99の整数で入力してください。");
         return false;
     }
@@ -687,7 +724,10 @@ function validateSettings() {
     }
 
     if (start.getTime() <= Date.now()) {
-        alert("予約処理開始日時は現在より後の時刻にしてください。");
+        alert(
+            "予約処理開始日時は現在より後の時刻にしてください。"
+        );
+
         return false;
     }
 
@@ -716,7 +756,9 @@ function stopReservation(logMessage = true) {
 }
 
 function startReservation() {
-    if (reservationRunning) return;
+    if (reservationRunning) {
+        return;
+    }
 
     if (!validateSettings()) {
         return;
@@ -726,8 +768,11 @@ function startReservation() {
 
     reservationRunning = true;
 
-    const start = new Date($("startDateTime").value);
-    scheduledStart = start.getTime();
+    const start =
+        new Date($("startDateTime").value);
+
+    scheduledStart =
+        start.getTime();
 
     $("startButton").classList.add("hidden");
     $("stopButton").classList.remove("hidden");
@@ -737,30 +782,90 @@ function startReservation() {
     addLog("予約設定を受け付けました。");
     addLog(`希望時間：${$("variant").value}`);
     addLog(`購入数量：${$("quantity").value}個`);
-    addLog(`開始日時：${formatDateTime($("startDateTime").value)}`);
+    addLog(
+        `開始日時：${formatDateTime($("startDateTime").value)}`
+    );
     addLog(`確認間隔：${$("retryInterval").value}秒`);
-    addLog("現在はテストモードです。Fishingmaxには接続しません。");
+    addLog("予約開始時刻まで待機します。");
 
     updateCountdown();
-    countdownTimer = setInterval(updateCountdown, 1000);
+
+    countdownTimer =
+        setInterval(updateCountdown, 1000);
+}
+
+async function dispatchReservation() {
+    const productUrl =
+        $("productUrl").value.trim();
+
+    const desiredTime =
+        $("variant").value.trim();
+
+    const desiredQuantity =
+        $("quantity").value.trim();
+
+    addLog("Cloudflare Workerへ予約処理を送信しています。");
+
+    const response = await fetch(WORKER_URL, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            product_url: productUrl,
+            desired_time: desiredTime,
+            desired_quantity: desiredQuantity
+        })
+    });
+
+    let data;
+
+    try {
+        data = await response.json();
+    } catch (error) {
+        throw new Error(
+            `WorkerからJSON形式のレスポンスを取得できませんでした。HTTP ${response.status}`
+        );
+    }
+
+    if (!response.ok || !data.ok) {
+        const details =
+            data && data.error
+                ? data.error
+                : `HTTP ${response.status}`;
+
+        throw new Error(details);
+    }
+
+    return data;
 }
 
 function updateCountdown() {
-    if (!reservationRunning || scheduledStart === null) {
+    if (
+        !reservationRunning ||
+        scheduledStart === null
+    ) {
         return;
     }
 
-    const remaining = scheduledStart - Date.now();
+    const remaining =
+        scheduledStart - Date.now();
 
     if (remaining <= 0) {
         clearInterval(countdownTimer);
         countdownTimer = null;
 
-        setCountdown("開始時刻になりました", true);
-        setStatus("予約処理開始待ち", "warning");
+        setCountdown(
+            "予約処理を開始しています",
+            true
+        );
+
+        setStatus(
+            "クラウド予約エンジン起動中",
+            "running"
+        );
 
         addLog("設定した開始時刻になりました。");
-        addLog("現在はクラウド予約エンジン未接続のため、ここで停止しています。");
 
         reservationRunning = false;
         scheduledStart = null;
@@ -768,14 +873,82 @@ function updateCountdown() {
         $("startButton").classList.remove("hidden");
         $("stopButton").classList.add("hidden");
 
+        dispatchReservation()
+            .then((data) => {
+                setCountdown(
+                    "予約処理を開始しました",
+                    true
+                );
+
+                setStatus(
+                    "クラウド予約エンジン実行中",
+                    "success"
+                );
+
+                addLog(
+                    "Cloudflare Workerへの送信に成功しました。"
+                );
+
+                addLog(
+                    `GitHub Actionsを起動しました：${
+                        data.workflow ||
+                        "reservation-test.yml"
+                    }`
+                );
+
+                addLog(
+                    "GitHub Actions上でFishingmaxの予約処理を実行しています。"
+                );
+
+                addLog(
+                    "注文確定操作は自動実行しない設計です。"
+                );
+            })
+            .catch((error) => {
+                setCountdown(
+                    "予約処理の起動に失敗しました",
+                    true
+                );
+
+                setStatus(
+                    "起動エラー",
+                    "error"
+                );
+
+                addLog(
+                    `予約処理の起動に失敗しました：${error.message}`
+                );
+
+                $("startButton")
+                    .classList
+                    .remove("hidden");
+
+                $("stopButton")
+                    .classList
+                    .add("hidden");
+            });
+
         return;
     }
 
-    const totalSeconds = Math.floor(remaining / 1000);
-    const days = Math.floor(totalSeconds / 86400);
-    const hours = Math.floor((totalSeconds % 86400) / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
+    const totalSeconds =
+        Math.floor(remaining / 1000);
+
+    const days =
+        Math.floor(totalSeconds / 86400);
+
+    const hours =
+        Math.floor(
+            (totalSeconds % 86400) / 3600
+        );
+
+    const minutes =
+        Math.floor(
+            (totalSeconds % 3600) / 60
+        );
+
+    const seconds =
+        totalSeconds % 60;
 
     let text = "開始まで ";
 
@@ -793,31 +966,80 @@ function updateCountdown() {
 
 function runTest() {
     if (reservationRunning) {
-        alert("予約待機中は動作テストを実行できません。");
+        alert(
+            "予約待機中は動作テストを実行できません。"
+        );
+
         return;
     }
 
-    setStatus("動作テスト中", "running");
-    addLog("画面の動作テストを開始しました。");
+    setStatus(
+        "動作テスト中",
+        "running"
+    );
+
+    addLog(
+        "画面の動作テストを開始しました。"
+    );
 
     setTimeout(() => {
         addLog("入力欄の読み取り：OK");
         addLog("設定保存機能：OK");
         addLog("停止機能：OK");
         addLog("カウントダウン機能：OK");
-        addLog("Fishingmax接続：未実装");
-        addLog("注文確定操作：自動実行しない設計");
-        setStatus("テスト完了", "success");
-        setCountdown("", false);
+        addLog("Cloudflare Worker接続：設定済み");
+        addLog("GitHub Actions接続：設定済み");
+        addLog(
+            "注文確定操作：自動実行しない設計"
+        );
+
+        setStatus(
+            "テスト完了",
+            "success"
+        );
+
+        setCountdown(
+            "",
+            false
+        );
     }, 500);
 }
 
-$("startButton").addEventListener("click", startReservation);
-$("stopButton").addEventListener("click", () => stopReservation(true));
-$("saveButton").addEventListener("click", () => saveSettings(true));
-$("clearButton").addEventListener("click", clearSettings);
-$("clearLogButton").addEventListener("click", clearLog);
-$("testButton").addEventListener("click", runTest);
+$("startButton")
+    .addEventListener(
+        "click",
+        startReservation
+    );
+
+$("stopButton")
+    .addEventListener(
+        "click",
+        () => stopReservation(true)
+    );
+
+$("saveButton")
+    .addEventListener(
+        "click",
+        () => saveSettings(true)
+    );
+
+$("clearButton")
+    .addEventListener(
+        "click",
+        clearSettings
+    );
+
+$("clearLogButton")
+    .addEventListener(
+        "click",
+        clearLog
+    );
+
+$("testButton")
+    .addEventListener(
+        "click",
+        runTest
+    );
 
 [
     "productUrl",
@@ -826,8 +1048,15 @@ $("testButton").addEventListener("click", runTest);
     "startDateTime",
     "retryInterval"
 ].forEach((id) => {
-    $(id).addEventListener("input", updateSummary);
-    $(id).addEventListener("change", updateSummary);
+    $(id).addEventListener(
+        "input",
+        updateSummary
+    );
+
+    $(id).addEventListener(
+        "change",
+        updateSummary
+    );
 });
 
 loadSettings();
